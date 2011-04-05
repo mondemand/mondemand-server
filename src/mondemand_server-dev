@@ -1,0 +1,6 @@
+#!/bin/sh
+
+exec erl \
+  -config mondemand_server.config \
+  -s reloader \
+  -s mondemand_server_app
