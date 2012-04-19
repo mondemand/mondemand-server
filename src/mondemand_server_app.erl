@@ -13,8 +13,9 @@
 %%====================================================================
 start () ->
   [ ensure_started (App)
-    || App <- [sasl, crypto, lwes, mochiweb,
-               ibrowse, couchbeam, mondemand_server]].
+    || App <- [sasl, crypto, mochiweb, lwes,
+               ibrowse, couchbeam, erlrrd,
+               mondemand_server]].
 
 %-=====================================================================-
 %-                        application callbacks                        -

@@ -14,13 +14,13 @@ FW_PACKAGE_ARCHITECTURE_DEPENDENT="1"
 # 
 # For other packaging systems, the syntax is translated for you.
 
-FW_PACKAGE_DEPENDS="crypto_starter,lwes-erlang (>= 1.0.1),ibrowse,mochiweb,couchbeam"
+FW_PACKAGE_DEPENDS="crypto_starter,lwes-erlang (>= 1.0.1),ibrowse,mochiweb,couchbeam,erlrrd (>= 0.5.0.0)"
 FW_PACKAGE_CONFLICTS=""
 FW_PACKAGE_PROVIDES=""
 FW_PACKAGE_REPLACES=""
 FW_PACKAGE_SUGGESTS=""
 
-FW_PACKAGE_BUILD_DEPENDS="crypto_starter,lwes-erlang (>= 1.0.1),ibrowse,mochiweb,couchbeam"
+FW_PACKAGE_BUILD_DEPENDS="crypto_starter,lwes-erlang (>= 1.0.1),ibrowse,mochiweb,couchbeam,erlrrd (>= 0.5.0.0)"
 FW_PACKAGE_BUILD_CONFLICTS=""
 
 # dupload is used for submitting debian packages to a package archive
@@ -92,7 +92,7 @@ FW_ERL_APP_ENVIRONMENT="[
 # uncomment to indicate additional OTP applications (besides kernel and stdlib)
 # that this application depends upon.  should be an erlang expression which 
 # evaluates to a list.
-FW_ERL_PREREQ_APPLICATIONS_EXTRA="[crypto,lwes,mochiweb,ibrowse,couchbeam]"
+FW_ERL_PREREQ_APPLICATIONS_EXTRA="[crypto,lwes,mochiweb,ibrowse,couchbeam,erlrrd]"
 
 # uncomment to add arbitrary extra content to the app file, e.g., an
 # included application directive.  should be an erlang expression which 
