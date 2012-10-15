@@ -18,7 +18,7 @@
            code_change/3
          ]).
 
--record (state, {config, root}).
+-record (state, {config, root, context_delimiter}).
 
 %%====================================================================
 %% API
@@ -34,17 +34,25 @@ process (Event) ->
 %%====================================================================
 init (Config) ->
   Dir = proplists:get_value (root, Config, "."),
+  Delimiter = proplists:get_value (context_delimiter, Config, "-"),
 
   mondemand_util:mkdir_p (Dir),
 
-  { ok, #state {config = Config, root = filename:join (Dir)} }.
+  { ok, #state {
+          config = Config,
+          root = filename:join (Dir),
+          context_delimiter = Delimiter
+        }
+  }.
 
 handle_call (Request, From, State) ->
   error_logger:warning_msg ("~p : Unrecognized call ~p from ~p~n",
                             [?MODULE, Request, From]),
   { reply, ok, State }.
 
-handle_cast ({process, Binary}, State = #state { root = Dir }) ->
+handle_cast ({process, Binary},
+             State = #state { root = Dir,
+                              context_delimiter = Delimiter }) ->
 
   Event =  lwes_event:from_udp_packet (Binary, dict),
   #lwes_event { attrs = Data } = Event,
@@ -54,7 +62,8 @@ handle_cast ({process, Binary}, State = #state { root = Dir }) ->
 
   Num = dict:fetch (<<"num">>, Data),
   ProgId = dict:fetch (<<"prog_id">>, Data),
-  {Host, ContextString} = mondemand_util:construct_context_string (Event),
+  {Host, ContextString} =
+    mondemand_util:construct_context_string (Event, Delimiter),
   lists:foreach (
     fun(E) ->
       T = dict:fetch (mondemand_util:stat_type (E), Data),
@@ -101,7 +110,10 @@ update (File, Type, Timestamp, Value) ->
       {ok, _} =
         case Type of
           <<"counter">> -> create_counter (File);
-          <<"gauge">> -> create_gauge (File)
+          <<"gauge">> -> create_gauge (File);
+          E ->
+            error_logger:error_msg (
+              "mondemand_stats_rrd:update/4 : Got ~p for Type ~p",[E,Type])
         end
   end,
   {ok, _} =

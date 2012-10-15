@@ -9,7 +9,7 @@
           mdyhms_to_dir_prefix/1,
           mdyhms_to_log_string/1,
           mkdir_p/1,
-          construct_context_string/1,
+          construct_context_string/2,
           join/2,
           stat_key/1,
           stat_val/1,
@@ -57,7 +57,7 @@ mkdir_p (Dir) ->
     {error, eexist} -> ok
   end.
 
-construct_context_string (#lwes_event { attrs = Data }) ->
+construct_context_string (#lwes_event { attrs = Data }, Delimiter) ->
   CtxtNum =
     case dict:find (<<"ctxt_num">>, Data) of
       error -> 0;
@@ -77,7 +77,7 @@ construct_context_string (#lwes_event { attrs = Data }) ->
                       ({K,V},{H,A}) -> {H,[[K,"=",V]|A]}
                   end,
                   {"unknown",[]}, Context),
-  ContextString = join (C1, "-"),
+  ContextString = join (C1, Delimiter),
   {Host, ContextString}.
 
 join (L,S) when is_list (L) ->

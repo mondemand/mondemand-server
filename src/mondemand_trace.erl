@@ -54,7 +54,7 @@ handle_call (Request, From, State) ->
   { reply, ok, State }.
 
 handle_cast ({process, Event}, State = #state { couch = Couch }) ->
-  Doc = { lwes_event:from_udp_packet (Event, json) },
+  Doc = lwes_event:from_udp_packet (Event, json_eep18),
   {ok, _Doc1} = couchbeam:save_doc (Couch, Doc),
   {noreply, State};
 
