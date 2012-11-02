@@ -37,10 +37,11 @@ process_event (Event, A) ->
 init ([]) ->
   % get appication variables
   { ok, Root } = application:get_env (mondemand_server, journal_dir),
+  mkdir_p (Root),
   { ok, Name } = application:get_env (mondemand_server, journal_name),
   { ok, Interval } = application:get_env (mondemand_server, rotation_interval),
   { ok, LwesConfig} = application:get_env (mondemand_server, listener),
-  { ok, {CouchHost,CouchPort}} =
+  { ok, {CouchHost,CouchPort, CouchUser, CouchPassword}} =
     application:get_env (mondemand_server, couch),
 
   % I want terminate to be called
@@ -52,7 +53,13 @@ init ([]) ->
                                                {interval, Interval}]),
 
   % open and test couch connection
-  Server = couchbeam:server_connection (CouchHost, CouchPort, "", []),
+  Server =
+    case CouchUser of
+      "" -> couchbeam:server_connection (CouchHost, CouchPort, "", []);
+      _ -> couchbeam:server_connection (CouchHost, CouchPort, "",
+             [{basic_auth, {CouchUser, CouchPassword}}])
+    end,
+
   {ok, _Version} = couchbeam:server_info (Server),
   {ok, Couch} = couchbeam:open_or_create_db (Server, "traces"),
 
@@ -81,7 +88,7 @@ handle_cast ( {process, Event},
     <<"MonDemand::LogMsg">> ->
       ok;
     <<"MonDemand::TraceMsg">> ->
-      Doc = { lwes_event:from_udp_packet (Event, json) },
+      Doc = { lwes_event:from_udp_packet (Event, json_eep18) },
       {ok, _Doc1} = couchbeam:save_doc (Couch, Doc);
     Name ->
       error_logger:info_msg ("Unknown message : ~p", [Name])
@@ -113,3 +120,20 @@ code_change (_OldVsn, State, _Extra) ->
 %%====================================================================
 %% Internal
 %%====================================================================
+
+% if the directory list of the form
+%  [ "foo", "bar", "baz" ]
+% I want to filename:join/1 it, so to differentiate this from the
+% case where I have mkdir_p("foo"), I need to check for a nested
+% list of at least one character, thus [[_|_]|_]
+mkdir_p (Dir = [[_|_]|_]) when is_list (Dir) ->
+  mkdir_p (filename:join (Dir));
+mkdir_p (Dir) ->
+  % ensure_dir only seemed to create all but the final level of directories
+  % so I need to make_dir right afterward to create the final directory
+  ok = filelib:ensure_dir (Dir),
+  case file:make_dir (Dir) of
+    ok -> ok;
+    {error, eexist} -> ok
+  end.
+
