@@ -2,7 +2,7 @@
 # variable FW_PACKAGE_DEFAULT_MAINTAINER if non-empty at init time
 
 FW_PACKAGE_NAME="mondemand-server"
-FW_PACKAGE_VERSION="0.0.0"
+FW_PACKAGE_VERSION="0.1.1"
 FW_PACKAGE_MAINTAINER="Anthony Molinaro <anthony.molinaro@openx.org>"
 FW_PACKAGE_SHORT_DESCRIPTION="A Server for dealing with mondemand events"
 FW_PACKAGE_DESCRIPTION=`cat README`
@@ -14,13 +14,21 @@ FW_PACKAGE_ARCHITECTURE_DEPENDENT="1"
 # 
 # For other packaging systems, the syntax is translated for you.
 
-FW_PACKAGE_DEPENDS="crypto_starter,lwes-erlang (>= 1.0.1),ibrowse,mochiweb,couchbeam"
+FW_PACKAGE_DEPENDS="crypto_starter,
+  lwes-erlang (>= 2.2.0),
+  ibrowse (>= 3.0.2.1),
+  mochiweb (>= 2.3.1.1),
+  couchbeam (>= 0.7.3.0)"
 FW_PACKAGE_CONFLICTS=""
 FW_PACKAGE_PROVIDES=""
 FW_PACKAGE_REPLACES=""
 FW_PACKAGE_SUGGESTS=""
 
-FW_PACKAGE_BUILD_DEPENDS="crypto_starter,lwes-erlang (>= 1.0.1),ibrowse,mochiweb,couchbeam"
+FW_PACKAGE_BUILD_DEPENDS="crypto_starter,
+  lwes-erlang (>= 2.2.0),
+  ibrowse (>= 3.0.2.1),
+  mochiweb (>= 2.3.1.1),
+  couchbeam (>= 0.7.3.0)"
 FW_PACKAGE_BUILD_CONFLICTS=""
 
 # dupload is used for submitting debian packages to a package archive
@@ -86,7 +94,7 @@ FW_ERL_APP_ENVIRONMENT="[
   {journal_name,\"all_events.log\"},
   {rotation_interval, 60},
   {listener,{\"127.0.0.1\",20402}},
-  {couch, {\"localhost\",5984}}
+  {couch, {\"localhost\", 5984, \"\", \"\"}}
 ]"
 
 # uncomment to indicate additional OTP applications (besides kernel and stdlib)
