@@ -2,7 +2,7 @@
 # variable FW_PACKAGE_DEFAULT_MAINTAINER if non-empty at init time
 
 FW_PACKAGE_NAME="mondemand-server"
-FW_PACKAGE_VERSION="0.0.0"
+FW_PACKAGE_VERSION="0.1.0"
 FW_PACKAGE_MAINTAINER="Anthony Molinaro <anthony.molinaro@openx.org>"
 FW_PACKAGE_SHORT_DESCRIPTION="A Server for dealing with mondemand events"
 FW_PACKAGE_DESCRIPTION=`cat README`

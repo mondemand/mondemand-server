@@ -64,6 +64,7 @@ handle_cast ({process, Binary},
   ProgId = dict:fetch (<<"prog_id">>, Data),
   {Host, ContextString} =
     mondemand_util:construct_context_string (Event, Delimiter),
+
   lists:foreach (
     fun(E) ->
       T = dict:fetch (mondemand_util:stat_type (E), Data),
