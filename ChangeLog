@@ -1,0 +1,11 @@
+* Tue Nov 20 2012 Anthony Molinaro <anthonym@alumni.caltech.edu> 0.2.0
+- new version as a package
+
+* Fri Nov 02 2011 Anthony Molinaro <anthonym@alumni.caltech.edu> 0.1.1
+- fix for couchbeam
+
+* Thu Nov 01 2011 Anthony Molinaro <anthonym@alumni.caltech.edu> 0.1.0
+- backport of a couple of fixes
+
+* Tue Apr 05 2011 Anthony Molinaro <anthonym@alumni.caltech.edu> 0.0.0
+- initial version

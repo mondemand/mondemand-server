@@ -65,8 +65,7 @@ handle_cast ({process, Binary},
   {Host, ContextString} =
     mondemand_util:construct_context_string (Event, Delimiter),
 
-  lists:foreach (
-    fun(E) ->
+  [ begin
       T = dict:fetch (mondemand_util:stat_type (E), Data),
       K = dict:fetch (mondemand_util:stat_key (E), Data),
       V = dict:fetch (mondemand_util:stat_val (E), Data),
@@ -83,7 +82,10 @@ handle_cast ({process, Binary},
 
       ok = mondemand_util:mkdir_p (filename:join([Dir, ProgId, K])),
       update (FilePath, T, SecsSinceEpoch, V)
-    end, lists:seq (1,Num)),
+    end
+    || E
+    <- lists:seq (1,Num)
+  ],
   {noreply, State};
 
 handle_cast (Request, State) ->
@@ -117,11 +119,16 @@ update (File, Type, Timestamp, Value) ->
               "mondemand_stats_rrd:update/4 : Got ~p for Type ~p",[E,Type])
         end
   end,
-  {ok, _} =
+  case
     erlrrd:update ([
         io_lib:fwrite ("~s",[File]),
         io_lib:fwrite (" ~b:~b", [Timestamp,Value])
-      ]),
+      ]) of
+    {ok, _} -> ok;
+    Err ->
+      error_logger:error_msg (
+        "mondemand_stats_rrd:update/4 : Got ~p from update",[Err])
+  end,
   ok.
 
 create_counter (File) ->
