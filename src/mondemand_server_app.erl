@@ -15,7 +15,7 @@ start () ->
   [ ensure_started (App)
     || App <- [ sasl, crypto, public_key, inets, ssl,
                 xmerl, compiler, syntax_tools, mochiweb,
-                lwes, ibrowse, couchbeam, erlrrd,
+                lwes, ibrowse, couchbeam, erlrrd, lager, riemann,
                 mondemand_server]].
 
 %-=====================================================================-
