@@ -54,7 +54,7 @@ handle_cast ({process, Binary}, State) ->
       C ->
         case lists:keytake (<<"host">>, 1, C) of
           false -> { "unknown", C };
-          {value, {<<"host">>, H}, OC } -> {H, OC }
+          {value, {<<"host">>, H}, OC } -> {H, OC}
         end
     end,
 
@@ -73,7 +73,9 @@ handle_cast ({process, Binary}, State) ->
           metric_f = V * 1.0,
           time = Timestamp,
           host = Host,
-          attributes = Context
+          attributes =
+            [ #riemannattribute { key = CK, value = CV }
+              || { CK, CV} <- Context ]
         }
 
 %        riemann:event ([ {service, ProgId},
