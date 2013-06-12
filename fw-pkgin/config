@@ -2,7 +2,7 @@
 # variable FW_PACKAGE_DEFAULT_MAINTAINER if non-empty at init time
 
 FW_PACKAGE_NAME="mondemand-server"
-FW_PACKAGE_VERSION="0.2.0"
+FW_PACKAGE_VERSION="0.3.0"
 FW_PACKAGE_MAINTAINER="Anthony Molinaro <anthony.molinaro@openx.org>"
 FW_PACKAGE_SHORT_DESCRIPTION="A Server for dealing with mondemand events"
 FW_PACKAGE_DESCRIPTION=`cat README`
@@ -15,20 +15,22 @@ FW_PACKAGE_ARCHITECTURE_DEPENDENT="1"
 # For other packaging systems, the syntax is translated for you.
 
 FW_PACKAGE_DEPENDS="
-  crypto_starter,
-  lwes-erlang (>= 2.2.0),
-  couchbeam (>= 0.7.3.0),
-  erlrrd (>= 0.5.0.0)"
+  crypto_starter | erlang-r15b-crypto-starter,
+  lwes-erlang (>= 2.2.0) | erlang-r15b-lwes (>= 2.2.0),
+  couchbeam (>= 0.7.3.0) | erlang-r15b-couchbeam (>= 0.7.3.0),
+  erlrrd (>= 0.5.0.0) | erlang-r15b-erlrrd (>= 0.5.0.0)
+"
 FW_PACKAGE_CONFLICTS=""
 FW_PACKAGE_PROVIDES=""
 FW_PACKAGE_REPLACES=""
 FW_PACKAGE_SUGGESTS=""
 
 FW_PACKAGE_BUILD_DEPENDS="
-  crypto_starter,
-  lwes-erlang (>= 2.2.0),
-  couchbeam (>= 0.7.3.0),
-  erlrrd (>= 0.5.0.0)"
+  crypto_starter | erlang-r15b-crypto-starter,
+  lwes-erlang (>= 2.2.0) | erlang-r15b-lwes (>= 2.2.0),
+  couchbeam (>= 0.7.3.0) | erlang-r15b-couchbeam (>= 0.7.3.0),
+  erlrrd (>= 0.5.0.0) | erlang-r15b-erlrrd (>= 0.5.0.0)
+"
 FW_PACKAGE_BUILD_CONFLICTS=""
 
 # dupload is used for submitting debian packages to a package archive

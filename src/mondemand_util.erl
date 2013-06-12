@@ -9,6 +9,7 @@
           mdyhms_to_dir_prefix/1,
           mdyhms_to_log_string/1,
           mkdir_p/1,
+          construct_context/1,
           construct_context_string/2,
           join/2,
           stat_key/1,
@@ -57,21 +58,24 @@ mkdir_p (Dir) ->
     {error, eexist} -> ok
   end.
 
-construct_context_string (#lwes_event { attrs = Data }, Delimiter) ->
+
+construct_context (#lwes_event { attrs = Data }) ->
   CtxtNum =
     case dict:find (<<"ctxt_num">>, Data) of
       error -> 0;
       {ok, C} -> C
     end,
-  Context =
-    lists:keysort (1,
-      lists:map (
-        fun (N) ->
-          K = dict:fetch (ctxt_key (N), Data),
-          V = dict:fetch (ctxt_val (N), Data),
-          {K,V}
-        end,
-        lists:seq (1,CtxtNum))),
+  lists:map (
+    fun (N) ->
+      K = dict:fetch (ctxt_key (N), Data),
+      V = dict:fetch (ctxt_val (N), Data),
+      {K,V}
+    end,
+    lists:seq (1,CtxtNum)
+  ).
+
+construct_context_string (Event, Delimiter) ->
+  Context = lists:keysort (1, construct_context (Event)),
   {Host, C1} =
      lists:foldl (fun ({<<"host">>,H}, {_,A}) -> {H,A};
                       ({K,V},{H,A}) -> {H,[[K,"=",V]|A]}
