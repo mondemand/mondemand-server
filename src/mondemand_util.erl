@@ -5,7 +5,8 @@
 
 -compile({parse_transform, ct_expand}).
 
--export ([epoch_to_mdyhms/1,
+-export ([seconds_since_epoch/0,
+          epoch_to_mdyhms/1,
           mdyhms_to_dir_prefix/1,
           mdyhms_to_log_string/1,
           mkdir_p/1,
@@ -24,6 +25,10 @@
           log_repeat_key/1,
           priority_string/1
         ]).
+
+seconds_since_epoch () ->
+  {Mega, Secs, _ } = os:timestamp(),
+  Mega * 1000000 + Secs.
 
 epoch_to_mdyhms(MilliSeconds) ->
   calendar:now_to_universal_time (
@@ -55,7 +60,8 @@ mkdir_p (Dir) ->
   ok = filelib:ensure_dir (Dir),
   case file:make_dir (Dir) of
     ok -> ok;
-    {error, eexist} -> ok
+    {error, eexist} -> ok;
+    E -> E
   end.
 
 

@@ -1,3 +1,7 @@
+* Fri Sep 06 2013 Anthony Molinaro <anthonym@alumni.caltech.edu> 0.4.0
+- protect against a few common errors
+- keep track of error counts from each backend
+
 * Wed Jun 12 2013 Anthony Molinaro <anthonym@alumni.caltech.edu> 0.3.0
 - utility function to get context as a proplist
 

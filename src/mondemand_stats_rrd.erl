@@ -7,7 +7,9 @@
 
 %% API
 -export ([ start_link/1,
-           process/1 ]).
+           process/1,
+           error_count/0
+         ]).
 
 %% gen_server callbacks
 -export ([ init/1,
@@ -18,7 +20,7 @@
            code_change/3
          ]).
 
--record (state, {config, root, context_delimiter}).
+-record (state, {config, root, context_delimiter, error_count = 0}).
 
 %%====================================================================
 %% API
@@ -28,6 +30,9 @@ start_link (Config) ->
 
 process (Event) ->
   gen_server:cast (?MODULE, {process, Event}).
+
+error_count () ->
+  gen_server:call (?MODULE, {error_count}).
 
 %%====================================================================
 %% gen_server callbacks
@@ -45,6 +50,9 @@ init (Config) ->
         }
   }.
 
+handle_call ({error_count}, _From,
+             State = #state { error_count = ErrorCount }) ->
+  { reply, ErrorCount, State };
 handle_call (Request, From, State) ->
   error_logger:warning_msg ("~p : Unrecognized call ~p from ~p~n",
                             [?MODULE, Request, From]),
@@ -52,41 +60,57 @@ handle_call (Request, From, State) ->
 
 handle_cast ({process, Binary},
              State = #state { root = Dir,
-                              context_delimiter = Delimiter }) ->
+                              context_delimiter = Delimiter,
+                              error_count = ErrorCount }) ->
 
   Event =  lwes_event:from_udp_packet (Binary, dict),
   #lwes_event { attrs = Data } = Event,
 
-  Timestamp = dict:fetch (<<"ReceiptTime">>, Data),
-  SecsSinceEpoch = trunc (Timestamp / 1000),
+  SecsSinceEpoch =
+   case find (<<"ReceiptTime">>, Data, undefined) of
+     undefined -> mondemand_util:seconds_since_epoch ();
+     Timestamp -> trunc (Timestamp / 1000)
+   end,
 
-  Num = dict:fetch (<<"num">>, Data),
-  ProgId = dict:fetch (<<"prog_id">>, Data),
+  Num = find (<<"num">>, Data, 0),
+  ProgId = find (<<"prog_id">>, Data, <<"unknown">>),
   {Host, ContextString} =
     mondemand_util:construct_context_string (Event, Delimiter),
 
-  [ begin
-      T = dict:fetch (mondemand_util:stat_type (E), Data),
-      K = dict:fetch (mondemand_util:stat_key (E), Data),
-      V = dict:fetch (mondemand_util:stat_val (E), Data),
-      FilePath =
-        binary_to_list (
-          filename:join([Dir,
-                         ProgId,K,
-                         [ProgId,"-",T,"-",K,"-",Host,
-                          case ContextString of
-                            [] -> [];
-                            _ -> ["-",ContextString]
-                          end,
-                          ".rrd"]])),
-
-      ok = mondemand_util:mkdir_p (filename:join([Dir, ProgId, K])),
-      update (FilePath, T, SecsSinceEpoch, V)
-    end
-    || E
-    <- lists:seq (1,Num)
-  ],
-  {noreply, State};
+  % perform updates keeping track of any errors
+  NewErrorCount =
+    lists:foldl (
+      fun (E,A) ->
+        T = find (mondemand_util:stat_type(E), Data,<<"counter">>),
+        K = find (mondemand_util:stat_key(E), Data, <<"unknown">>),
+        V = find (mondemand_util:stat_val(E), Data, 1),
+        FileName = list_to_binary ([ProgId,"-",T,"-",K,"-",Host,
+                                    case ContextString of
+                                      [] -> [];
+                                      _ -> ["-",ContextString]
+                                    end,
+                                    ".rrd"]),
+        FilePath =
+          binary_to_list (
+            filename:join([Dir,
+                           ProgId,
+                           K,
+                           FileName
+                          ])
+          ),
+        case mondemand_util:mkdir_p (filename:join([Dir, ProgId, K])) of
+          ok ->
+             case update (FilePath, T, SecsSinceEpoch, V) of
+               ok -> A;
+               _ -> A + 1
+             end;
+          _ ->
+            A + 1
+        end
+      end,
+      ErrorCount,
+      lists:seq (1,Num)),
+  {noreply, State#state { error_count = NewErrorCount } };
 
 handle_cast (Request, State) ->
   error_logger:warning_msg ("~p : Unrecognized cast ~p~n",[?MODULE, Request]),
@@ -106,6 +130,13 @@ code_change (_OldVsn, State, _Extra) ->
 %% Internal
 %%====================================================================
 
+find (Key, Data, Default) ->
+  case dict:find (Key, Data) of
+    error -> Default;
+    {ok, Val} -> Val
+  end.
+
+% attempt an update, and return 0 if the update succeeds and 1 if it fails
 update (File, Type, Timestamp, Value) ->
   case file:read_file_info (File) of
     {ok, _} -> ok;
@@ -115,8 +146,9 @@ update (File, Type, Timestamp, Value) ->
           <<"counter">> -> create_counter (File);
           <<"gauge">> -> create_gauge (File);
           E ->
-            error_logger:error_msg (
-              "mondemand_stats_rrd:update/4 : Got ~p for Type ~p",[E,Type])
+            error_logger:warning_msg (
+              "mondemand_stats_rrd:update/4 : Got ~p for Type ~p",[E,Type]),
+            create_counter (File)
         end
   end,
   case
@@ -124,12 +156,13 @@ update (File, Type, Timestamp, Value) ->
         io_lib:fwrite ("~s",[File]),
         io_lib:fwrite (" ~b:~b", [Timestamp,Value])
       ]) of
-    {ok, _} -> ok;
+    {ok, _} ->
+      ok;
     Err ->
       error_logger:error_msg (
-        "mondemand_stats_rrd:update/4 : Got ~p from update",[Err])
-  end,
-  ok.
+        "mondemand_stats_rrd:update/4 : Got ~p from update for ~p:~p:~p:~p",[Err, File, Type, Timestamp, Value]),
+      error
+  end.
 
 create_counter (File) ->
   erlrrd:create ([

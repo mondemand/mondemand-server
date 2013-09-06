@@ -7,7 +7,9 @@
 
 %% API
 -export ([ start_link/1,
-           process/1 ]).
+           process/1,
+           error_count/0
+         ]).
 
 %% gen_server callbacks
 -export ([ init/1,
@@ -28,6 +30,10 @@ start_link (Config) ->
 
 process (Event) ->
   gen_server:cast (?MODULE, {process, Event}).
+
+error_count () ->
+  % TODO: deal with errors?
+  0.
 
 %%====================================================================
 %% gen_server callbacks

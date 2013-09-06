@@ -6,7 +6,9 @@
 
 %% API
 -export ([ start_link/1,
-           process/1 ]).
+           process/1,
+           error_count/0
+         ]).
 
 %% gen_server callbacks
 -export ([ init/1,
@@ -17,7 +19,7 @@
            code_change/3
          ]).
 
--record (state, { config, couch }).
+-record (state, { config, couch, error_count = 0}).
 
 %%====================================================================
 %% API
@@ -27,6 +29,9 @@ start_link (Config) ->
 
 process (Event) ->
   gen_server:cast (?MODULE, {process, Event}).
+
+error_count () ->
+  gen_server:call (?MODULE, {error_count}).
 
 %%====================================================================
 %% gen_server callbacks
@@ -48,15 +53,24 @@ init (Config) ->
       {stop, no_couchdb}
   end.
 
+handle_call ({error_count}, _From,
+             State = #state { error_count = ErrorCount }) ->
+  { reply, ErrorCount, State };
 handle_call (Request, From, State) ->
   error_logger:warning_msg ("~p : Unrecognized call ~p from ~p~n",
                             [?MODULE, Request, From]),
   { reply, ok, State }.
 
-handle_cast ({process, Event}, State = #state { couch = Couch }) ->
+handle_cast ({process, Event},
+             State = #state { couch = Couch,
+                              error_count = ErrorCount }) ->
   Doc = lwes_event:from_udp_packet (Event, json_eep18),
-  {ok, _Doc1} = couchbeam:save_doc (Couch, Doc),
-  {noreply, State};
+  NewErrorCount =
+    case couchbeam:save_doc (Couch, Doc) of
+      {ok, _Doc1} -> ErrorCount;
+      _ -> ErrorCount + 1
+    end,
+  {noreply, State#state { error_count = NewErrorCount }};
 
 handle_cast (Request, State) ->
   error_logger:warning_msg ("~p : Unrecognized cast ~p~n",[?MODULE, Request]),
