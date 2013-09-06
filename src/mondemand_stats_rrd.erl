@@ -138,30 +138,36 @@ find (Key, Data, Default) ->
 
 % attempt an update, and return 0 if the update succeeds and 1 if it fails
 update (File, Type, Timestamp, Value) ->
-  case file:read_file_info (File) of
-    {ok, _} -> ok;
-    _ ->
-      {ok, _} =
-        case Type of
-          <<"counter">> -> create_counter (File);
-          <<"gauge">> -> create_gauge (File);
-          E ->
-            error_logger:warning_msg (
-              "mondemand_stats_rrd:update/4 : Got ~p for Type ~p",[E,Type]),
-            create_counter (File)
-        end
-  end,
-  case
-    erlrrd:update ([
-        io_lib:fwrite ("~s",[File]),
-        io_lib:fwrite (" ~b:~b", [Timestamp,Value])
-      ]) of
-    {ok, _} ->
-      ok;
-    Err ->
-      error_logger:error_msg (
-        "mondemand_stats_rrd:update/4 : Got ~p from update for ~p:~p:~p:~p",[Err, File, Type, Timestamp, Value]),
+  case maybe_create (Type, File) of
+    { ok, _ } ->
+      case
+        erlrrd:update ([
+            io_lib:fwrite ("~s",[File]),
+            io_lib:fwrite (" ~b:~b", [Timestamp,Value])
+          ]) of
+        {ok, _} ->
+          ok;
+        Err ->
+          error_logger:error_msg (
+            "Unable to update '~p:~p:~p:~p' because of ~p",
+            [File, Type, Timestamp, Value, Err]),
+          error
+      end;
+    {error, Error} ->
+       error_logger:error_msg (
+        "Unable to create '~p' because of ~p",[File, Error]),
       error
+  end.
+
+maybe_create (Type, File) ->
+  case file:read_file_info (File) of
+    {ok, I} -> {ok, I};
+    _ ->
+      case Type of
+        <<"counter">> -> create_counter (File);
+        <<"gauge">> -> create_gauge (File);
+        _ -> create_counter (File) % default is counter
+      end
   end.
 
 create_counter (File) ->
