@@ -1,14 +1,16 @@
--module (mondemand_stats_rrd).
+-module (mondemand_backend_stats_rrd).
 
 -include_lib ("lwes/include/lwes.hrl").
 -include_lib ("kernel/include/file.hrl").
 
+-behaviour (mondemand_server_backend).
 -behaviour (gen_server).
 
-%% API
+%% mondemand_backend callbacks
 -export ([ start_link/1,
            process/1,
-           error_count/0
+           stats/0,
+           required_apps/0
          ]).
 
 %% gen_server callbacks
@@ -20,10 +22,14 @@
            code_change/3
          ]).
 
--record (state, {config, root, context_delimiter, error_count = 0}).
+-record (state, { config,
+                  root,
+                  context_delimiter,
+                  stats = dict:new ()
+                }).
 
 %%====================================================================
-%% API
+%% mondemand_backend callbacks
 %%====================================================================
 start_link (Config) ->
   gen_server:start_link ( { local, ?MODULE }, ?MODULE, Config, []).
@@ -31,8 +37,11 @@ start_link (Config) ->
 process (Event) ->
   gen_server:cast (?MODULE, {process, Event}).
 
-error_count () ->
-  gen_server:call (?MODULE, {error_count}).
+stats () ->
+  gen_server:call (?MODULE, {stats}).
+
+required_apps () ->
+  [ erlrrd ].
 
 %%====================================================================
 %% gen_server callbacks
@@ -41,18 +50,23 @@ init (Config) ->
   Dir = proplists:get_value (root, Config, "."),
   Delimiter = proplists:get_value (context_delimiter, Config, "-"),
 
-  mondemand_util:mkdir_p (Dir),
+  mondemand_server_util:mkdir_p (Dir),
+
+  % initialize all stats to zero
+  InitialStats =
+    mondemand_server_util:initialize_stats ([ errors, processed ] ),
 
   { ok, #state {
           config = Config,
           root = filename:join (Dir),
-          context_delimiter = Delimiter
+          context_delimiter = Delimiter,
+          stats = InitialStats
         }
   }.
 
-handle_call ({error_count}, _From,
-             State = #state { error_count = ErrorCount }) ->
-  { reply, ErrorCount, State };
+handle_call ({stats}, _From,
+             State = #state { stats = Stats }) ->
+  { reply, Stats, State };
 handle_call (Request, From, State) ->
   error_logger:warning_msg ("~p : Unrecognized call ~p from ~p~n",
                             [?MODULE, Request, From]),
@@ -61,29 +75,28 @@ handle_call (Request, From, State) ->
 handle_cast ({process, Binary},
              State = #state { root = Dir,
                               context_delimiter = Delimiter,
-                              error_count = ErrorCount }) ->
-
+                              stats = Stats }) ->
   Event =  lwes_event:from_udp_packet (Binary, dict),
   #lwes_event { attrs = Data } = Event,
 
   SecsSinceEpoch =
    case find (<<"ReceiptTime">>, Data, undefined) of
-     undefined -> mondemand_util:seconds_since_epoch ();
+     undefined -> mondemand_server_util:seconds_since_epoch ();
      Timestamp -> trunc (Timestamp / 1000)
    end,
 
   Num = find (<<"num">>, Data, 0),
   ProgId = find (<<"prog_id">>, Data, <<"unknown">>),
   {Host, ContextString} =
-    mondemand_util:construct_context_string (Event, Delimiter),
+    mondemand_server_util:construct_context_string (Event, Delimiter),
 
-  % perform updates keeping track of any errors
-  NewErrorCount =
+  % perform updates keeping track of number processed and number of errors
+  {TotalProcessed, TotalErrors} =
     lists:foldl (
-      fun (E,A) ->
-        T = find (mondemand_util:stat_type(E), Data,<<"counter">>),
-        K = find (mondemand_util:stat_key(E), Data, <<"unknown">>),
-        V = find (mondemand_util:stat_val(E), Data, 1),
+      fun (E, {Processed, Errors}) ->
+        T = find (mondemand_server_util:stat_type(E), Data,<<"counter">>),
+        K = find (mondemand_server_util:stat_key(E), Data, <<"unknown">>),
+        V = find (mondemand_server_util:stat_val(E), Data, 1),
         FileName = list_to_binary ([ProgId,"-",T,"-",K,"-",Host,
                                     case ContextString of
                                       [] -> [];
@@ -98,19 +111,25 @@ handle_cast ({process, Binary},
                            FileName
                           ])
           ),
-        case mondemand_util:mkdir_p (filename:join([Dir, ProgId, K])) of
+        case mondemand_server_util:mkdir_p (filename:join([Dir, ProgId, K])) of
           ok ->
              case update (FilePath, T, SecsSinceEpoch, V) of
-               ok -> A;
-               _ -> A + 1
+               ok -> { Processed + 1, Errors };
+               _ -> { Processed + 1, Errors + 1 }
              end;
           _ ->
-            A + 1
+            { Processed + 1, Errors + 1 }
         end
       end,
-      ErrorCount,
+      {0, 0},
       lists:seq (1,Num)),
-  {noreply, State#state { error_count = NewErrorCount } };
+
+  NewStats =
+    mondemand_server_util:increment_stat (processed, TotalProcessed,
+      mondemand_server_util:increment_stat (errors, TotalErrors,
+        Stats)),
+
+  {noreply, State#state { stats = NewStats } };
 
 handle_cast (Request, State) ->
   error_logger:warning_msg ("~p : Unrecognized cast ~p~n",[?MODULE, Request]),

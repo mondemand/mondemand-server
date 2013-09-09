@@ -1,4 +1,4 @@
--module(mondemand_util).
+-module(mondemand_server_util).
 
 -include_lib ("lwes/include/lwes.hrl").
 -include_lib ("kernel/include/file.hrl").
@@ -23,7 +23,10 @@
           log_priority_key/1,
           log_message_key/1,
           log_repeat_key/1,
-          priority_string/1
+          priority_string/1,
+          initialize_stats/1,
+          increment_stat/2,
+          increment_stat/3
         ]).
 
 seconds_since_epoch () ->
@@ -155,3 +158,15 @@ priority_string (6) -> <<"info">>;
 priority_string (7) -> <<"debug">>;
 priority_string (8) -> <<"all">>.
 
+initialize_stats (Keys) ->
+  lists:foldl (fun (E, D) ->
+                 dict:update_counter (E, 0, D)
+               end,
+               dict:new (),
+               Keys).
+
+increment_stat (Key, Stats) ->
+  dict:update_counter (Key, 1, Stats).
+
+increment_stat (Key, Amount, Stats) ->
+  dict:update_counter (Key, Amount, Stats).

@@ -23,25 +23,13 @@ start_link() ->
 %% @doc supervisor callback.
 init([]) ->
   Dispatch =
-    case application:get_env (mondemand_server, dispatch) of
-      { ok, D } -> D;
-      undefined -> exit(no_dispatch_list)
+    case mondemand_server_config:dispatch () of
+      [] -> exit (no_dispatch_list);
+      L -> L
     end,
+  error_logger:info_msg ("Dispatch ~p",[Dispatch]),
 
-  % split the dispatch list into the wildcard rule and others
-  { [{"*",AllList}], NotAllList } =
-    lists:splitwith(fun({"*",_})-> true; (_) -> false end, Dispatch),
-
-  % add the wildcard rule to the others
-  FinalDispatch =
-    lists:map (fun ({K,VL}) ->
-                 {list_to_binary (K), lists:append (VL, AllList)}
-               end,
-               NotAllList),
-
-  UniquedModules =
-    lists:usort(lists:flatten(lists:foldl(fun({_,L},A)-> [L|A] end,
-                                          [], FinalDispatch))),
+  BackendsToStart = mondemand_server_config:backends_to_start (),
 
   ToStart =
     {
@@ -49,7 +37,7 @@ init([]) ->
       [
         {
           mondemand_server,
-          { mondemand_server, start_link, [FinalDispatch] },
+          { mondemand_server, start_link, [Dispatch] },
           permanent,
           2000,
           worker,
@@ -57,16 +45,34 @@ init([]) ->
         }
         |
         [ begin
-            C =
-              case application:get_env (mondemand_server, M) of
+            BackendConfig =
+              case application:get_env (mondemand_server, BackendModule) of
                 { ok, T } -> T;
                 undefined -> []
               end,
-            { M, { M, start_link, [C] }, permanent, 2000, worker, [ M ] }
+            { BackendModule,
+              { BackendModule, start_link, [BackendConfig] },
+              permanent,
+              2000,
+              worker,
+              [ BackendModule ]
+            }
           end
-          || M <- UniquedModules ]
+          || BackendModule
+          <- BackendsToStart
+        ]
       ]
     },
   error_logger:info_msg ("Starting ~p",[ToStart]),
   { ok, ToStart }.
 
+%%--------------------------------------------------------------------
+%%% Test functions
+%%--------------------------------------------------------------------
+-ifdef(HAVE_EUNIT).
+-include_lib("eunit/include/eunit.hrl").
+-endif.
+
+-ifdef(EUNIT).
+
+-endif.

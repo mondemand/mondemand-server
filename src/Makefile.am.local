@@ -1,7 +1,8 @@
 # put whatever (auto)make commands here, they will be included from Makefile.am
 
 dist_erlappsrc_DATA = 		\
-  $(wildcard *.erl) \
+  mondemand_server_backend.erl \
+  $(filter-out mondemand_server_backend.erl,$(wildcard *.erl)) \
   $(wildcard *.xrl) \
   $(wildcard *.yrl) \
   $(patsubst %.xrl,%.erl,$(wildcard *.xrl)) \

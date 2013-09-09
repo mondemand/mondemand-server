@@ -12,11 +12,11 @@
 %% API functions
 %%====================================================================
 start () ->
-  [ ensure_started (App)
-    || App <- [ sasl, crypto, public_key, inets, ssl,
-                xmerl, compiler, syntax_tools, mochiweb,
-                lwes, ibrowse, couchbeam, erlrrd,
-                mondemand_server]].
+  Apps = lists:append ( [ [ sasl, lwes ],
+                          mondemand_server_config:applications_to_start(),
+                          [ mondemand_server ] ] ),
+  error_logger:info_msg ("Start ~p",[Apps]),
+  [ ensure_started (App) || App <- Apps ].
 
 %-=====================================================================-
 %-                        application callbacks                        -
@@ -45,3 +45,13 @@ ensure_started(App) ->
       ok
   end.
 
+%%--------------------------------------------------------------------
+%%% Test functions
+%%--------------------------------------------------------------------
+-ifdef(HAVE_EUNIT).
+-include_lib("eunit/include/eunit.hrl").
+-endif.
+
+-ifdef(EUNIT).
+
+-endif.

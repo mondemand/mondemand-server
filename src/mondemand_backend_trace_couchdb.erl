@@ -1,13 +1,15 @@
--module (mondemand_trace).
+-module (mondemand_backend_trace_couchdb).
 
 -include_lib ("lwes/include/lwes.hrl").
 
+-behaviour (mondemand_server_backend).
 -behaviour (gen_server).
 
-%% API
+%% mondemand_backend callbacks
 -export ([ start_link/1,
            process/1,
-           error_count/0
+           stats/0,
+           required_apps/0
          ]).
 
 %% gen_server callbacks
@@ -19,10 +21,13 @@
            code_change/3
          ]).
 
--record (state, { config, couch, error_count = 0}).
+-record (state, { config,
+                  couch,
+                  stats = dict:new ()
+                }).
 
 %%====================================================================
-%% API
+%% mondemand_backend callbacks
 %%====================================================================
 start_link (Config) ->
   gen_server:start_link ( { local, ?MODULE }, ?MODULE, Config, []).
@@ -30,8 +35,11 @@ start_link (Config) ->
 process (Event) ->
   gen_server:cast (?MODULE, {process, Event}).
 
-error_count () ->
-  gen_server:call (?MODULE, {error_count}).
+stats () ->
+  gen_server:call (?MODULE, {stats}).
+
+required_apps () ->
+  [ sasl, crypto, public_key, ssl, ibrowse, couchbeam ].
 
 %%====================================================================
 %% gen_server callbacks
@@ -44,18 +52,23 @@ init (Config) ->
   Server =
     couchbeam:server_connection (CouchHost, CouchPort, "",
                                  [{basic_auth, {CouchUser, CouchPassword}}]),
+
+  % initialize all stats to zero
+  InitialStats =
+    mondemand_server_util:initialize_stats ([ errors, processed ] ),
+
   case couchbeam:server_info (Server) of
     {ok, _} ->
       {ok, Couch} = couchbeam:open_or_create_db (Server, "traces"),
-      { ok, #state{ config = Config, couch = Couch }};
+      { ok, #state{ config = Config, couch = Couch, stats = InitialStats }};
     {error, _} ->
       io:format ("ERROR: Can't start CouchDB not running!~n"),
       {stop, no_couchdb}
   end.
 
-handle_call ({error_count}, _From,
-             State = #state { error_count = ErrorCount }) ->
-  { reply, ErrorCount, State };
+handle_call ({stats}, _From,
+             State = #state { stats = Stats }) ->
+  { reply, Stats, State };
 handle_call (Request, From, State) ->
   error_logger:warning_msg ("~p : Unrecognized call ~p from ~p~n",
                             [?MODULE, Request, From]),
@@ -63,14 +76,19 @@ handle_call (Request, From, State) ->
 
 handle_cast ({process, Event},
              State = #state { couch = Couch,
-                              error_count = ErrorCount }) ->
+                              stats = Stats
+                            }) ->
   Doc = lwes_event:from_udp_packet (Event, json_eep18),
-  NewErrorCount =
+
+  NewStats =
     case couchbeam:save_doc (Couch, Doc) of
-      {ok, _Doc1} -> ErrorCount;
-      _ -> ErrorCount + 1
+      {ok, _Doc1} ->
+         mondemand_server_util:increment_stat (processed, Stats);
+      _ ->
+         mondemand_server_util:increment_stat (errors, Stats)
     end,
-  {noreply, State#state { error_count = NewErrorCount }};
+
+  {noreply, State#state { stats = NewStats }};
 
 handle_cast (Request, State) ->
   error_logger:warning_msg ("~p : Unrecognized cast ~p~n",[?MODULE, Request]),
