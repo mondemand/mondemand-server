@@ -175,7 +175,7 @@ attempt_write (Dir, Owner, Id, ReceiptTime, ProgId, ExtraFields,
       attempt_write (Dir, Owner, Id, ReceiptTime, ProgId, ExtraFields,
                      Event, Num + 1, Max);
     {ok, Dev} ->
-      case file:write (Dev, mochijson2:encode (Event)) of
+      case file:write (Dev, lwes_mochijson2:encode (Event)) of
         { error, E3 } ->
           file:close (Dev),
           error_logger:error_msg ("got error ~p on write of ~p",
