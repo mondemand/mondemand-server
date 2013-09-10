@@ -1,3 +1,8 @@
+* Tue Sep 10 2013 Anthony Molinaro <anthonym@alumni.caltech.edu> 1.0.0
+- moved rrd stats backend and couchdb trace backend into separate packages
+- make a behaviour for backends
+- make a file based trace backend
+
 * Fri Sep 06 2013 Anthony Molinaro <anthonym@alumni.caltech.edu> 0.4.1
 - check for errors at rrd creation time
 

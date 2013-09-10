@@ -94,7 +94,7 @@ construct_context_string (Event, Delimiter) ->
   {Host, ContextString}.
 
 join (L,S) when is_list (L) ->
-  join (L, S, []).
+  lists:reverse (join (L, S, [])).
 
 join ([], _, A) ->
   A;
