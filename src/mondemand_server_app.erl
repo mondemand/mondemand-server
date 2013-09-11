@@ -23,6 +23,11 @@ start () ->
 %-=====================================================================-
 
 start (_Type, _Args) ->
+  % need to make sure that all the apps called out by plugins are started
+  % prior to starting our supervisor, else we get errors
+  [ ensure_started (App)
+    || App <- mondemand_server_config:applications_to_start() ],
+
   case mondemand_server_sup:start_link() of
     {ok, Pid} ->
       {ok, Pid};
