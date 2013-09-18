@@ -1,3 +1,7 @@
+* Wed Sep 18 2013 Anthony Molinaro <anthonym@alumni.caltech.edu> 1.0.2
+- numeric trace ids sometimes come in which breaks the trace, so normalize
+to binary
+
 * Wed Sep 11 2013 Anthony Molinaro <anthonym@alumni.caltech.edu> 1.0.1
 - need to ensure all apps for backends get a chance to start ahead of
 the supervisor

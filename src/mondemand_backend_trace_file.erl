@@ -85,9 +85,11 @@ handle_cast ({process, Binary},
     case Event of
       {PL} when is_list (PL) ->
         Owner =
-          proplists:get_value (<<"mondemand.owner">>, PL, <<"unknown">>),
+          normalize_to_binary (
+            proplists:get_value (<<"mondemand.owner">>, PL, <<"unknown">>)),
         Id =
-          proplists:get_value (<<"mondemand.trace_id">>, PL, <<"unknown">>),
+          normalize_to_binary (
+            proplists:get_value (<<"mondemand.trace_id">>, PL, <<"unknown">>)),
         ProgId =
           proplists:get_value (<<"mondemand.prog_id">>, PL, <<"unknown">>),
         ReceiptTime =
@@ -186,6 +188,13 @@ attempt_write (Dir, Owner, Id, ReceiptTime, ProgId, ExtraFields,
           ok
       end
   end.
+
+normalize_to_binary (I) when is_integer (I) ->
+  list_to_binary (integer_to_list (I));
+normalize_to_binary (L) when is_list (L) ->
+  list_to_binary (L);
+normalize_to_binary (B) when is_binary (B) ->
+  B.
 
 %%--------------------------------------------------------------------
 %%% Test functions
