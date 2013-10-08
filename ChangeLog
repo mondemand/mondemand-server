@@ -1,3 +1,6 @@
+* Tue Oct 08 2013 Anthony Molinaro <anthonym@alumni.caltech.edu> 1.1.0
+- integrate webmachine and the file based trace console
+
 * Wed Sep 18 2013 Anthony Molinaro <anthonym@alumni.caltech.edu> 1.0.2
 - numeric trace ids sometimes come in which breaks the trace, so normalize
 to binary

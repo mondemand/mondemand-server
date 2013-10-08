@@ -151,18 +151,16 @@ attempt_write (Dir, Owner, Id, ReceiptTime, ProgId, ExtraFields,
   %
   % This is dense, but we end up with the trace file being
   %
-  %   Dir/Owner/Id/ReceipTime:Num-ProgId(-ExtraFields)?
+  %   Dir/Owner/Id/trace-ReceipTime-Num-ProgId(-ExtraFields)?
   %
   % where the Num is there incase the ReceiptTime is the same and the
   % ExtraFields end up being separated by hyphens
   TraceFile =
     filename:join ([Dir, Owner, Id,
                     mondemand_server_util:join (
-                      [ mondemand_server_util:join (
-                          [ ReceiptTime,
-                            list_to_binary (integer_to_list (Num))],
-                          <<":">>
-                        ),
+                      [ "trace",
+                        ReceiptTime,
+                        list_to_binary (integer_to_list (Num)),
                         ProgId | ExtraFields],
                       <<"-">>)]),
 

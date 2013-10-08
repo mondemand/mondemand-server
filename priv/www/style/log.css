@@ -1,0 +1,25 @@
+div {
+  margin: 0px;
+}
+.col1 {
+  float: left;
+}
+.break {
+  clear: both;
+}
+.expandable:hover {
+  color: #000099;
+  cursor: default;
+  text-decoration: underline;
+}
+.open:before {
+  margin-left:-9px;
+  content:url(../images/minus.gif);
+}
+.closed:before {
+  margin-left:-9px;
+  content:url(../images/plus.gif);
+}
+.none {
+  font-weight: bold;
+}

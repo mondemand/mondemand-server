@@ -3,10 +3,10 @@
 -behaviour (supervisor).
 
 %% API
--export([start_link/0]).
+-export ([start_link/0]).
 
 %% supervisor callbacks
--export([init/1]). 
+-export ([init/1]). 
 
 %%====================================================================
 %% API functions
@@ -27,14 +27,39 @@ init([]) ->
       [] -> exit (no_dispatch_list);
       L -> L
     end,
-  error_logger:info_msg ("Dispatch ~p",[Dispatch]),
 
-  BackendsToStart = mondemand_server_config:backends_to_start (),
+  BackendConfigs =
+    [ begin
+        BackendConfig =
+          case application:get_env (mondemand_server, BackendModule) of
+            { ok, T } -> T;
+            undefined -> []
+          end,
+        { BackendModule,
+          { BackendModule, start_link, [BackendConfig] },
+          permanent,
+          2000,
+          worker,
+          [ BackendModule ]
+        }
+      end
+      || BackendModule
+      <- mondemand_server_config:backends_to_start ()
+    ],
 
   ToStart =
     {
       { one_for_one, 10, 10 },
+      BackendConfigs ++
       [
+        { webmachine_mochiweb,
+          { webmachine_mochiweb, start,
+            [mondemand_server_config:web_config ()]},
+          permanent,
+          5000,
+          worker,
+          dynamic
+        },
         {
           mondemand_server,
           { mondemand_server, start_link, [Dispatch] },
@@ -43,27 +68,8 @@ init([]) ->
           worker,
           [ mondemand_server ]
         }
-        |
-        [ begin
-            BackendConfig =
-              case application:get_env (mondemand_server, BackendModule) of
-                { ok, T } -> T;
-                undefined -> []
-              end,
-            { BackendModule,
-              { BackendModule, start_link, [BackendConfig] },
-              permanent,
-              2000,
-              worker,
-              [ BackendModule ]
-            }
-          end
-          || BackendModule
-          <- BackendsToStart
-        ]
       ]
     },
-  error_logger:info_msg ("Starting ~p",[ToStart]),
   { ok, ToStart }.
 
 %%--------------------------------------------------------------------
