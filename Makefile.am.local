@@ -1,3 +1,0 @@
-# put whatever (auto)make commands here, they will be included from Makefile.am
-confdir = /etc/mondemand
-dist_conf_DATA = mondemand_server.config

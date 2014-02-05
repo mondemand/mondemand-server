@@ -1,0 +1,12 @@
+#!/bin/sh
+
+deps=
+for d in deps/* ; do
+  deps="$deps -pa $d/ebin"
+done
+exec erl \
+  $deps \
+  -pa ebin \
+  -config mondemand_server_dev.config \
+  -s reloader \
+  -s mondemand_server_app

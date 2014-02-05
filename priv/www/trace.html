@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Mondemand Trace Console</title>
+    <link rel="stylesheet" href="style/main.css" type="text/css">
+    <link rel="stylesheet" href="style/log.css" type="text/css">
+    <link rel="stylesheet" href="style/ui-lightness/jquery-ui-1.8.12.custom.css" type="text/css"/>
+    <script src="js/sha1.js"></script>
+    <script src="js/json2.js"></script>
+    <script src="js/jquery.js"></script>
+    <script src="js/jquery.ui.core.js"></script>
+    <script src="js/jquery.ui.widget.js"></script>
+    <script src="js/jquery.ui.position.js"></script>
+    <script src="js/jquery.ui.autocomplete.js"></script>
+<!--    <script src="/_utils/script/jquery.couch.js"></script>
+<script src="vendor/couchapp/jquery.couch.app.js"></script> -->
+    <script src="js/jquery.mustache.js"></script>
+    <script src="js/date.format.js"></script>
+    <script src="js/json2divs.js"></script>
+    <script src="js/jquery.url.param.js"></script>
+  </head>
+  <body>
+    <!--    <div id="account"></div> -->
+
+    <h1>Mondemand Trace Console</h1>
+
+    <!-- <div id="profile"></div> -->
+    <div id="sidebar">
+      <form>
+        <input id="owner" type="text" value="Owner"/>
+        <input id="trace_id" type="text" value="Trace Id" size="100"/>
+        <button id="load-trace" type="button">Load-Trace</button>
+        <button id="recent-traces" type="button" tabindex="-1">Recent-Traces</button>
+      </form>
+    </div>
+
+    <div id="activity"></div>
+
+  </body>
+
+  <!--  <script src="js/log.js"></script> -->
+  <script type="text/javascript" charset="utf-8">
+    /* $.couch.app(function(app) { */
+    $(function(){
+      var all_owners = [];
+      var current_traces = [];
+
+      function loadRecent ()
+        {
+/*          app.view ("recent-traces",
+                    { descending: true,
+                      limit: 10,
+                      success:
+                        function (json) {
+                          var inner =
+                            json.rows.map (
+                               function (row) {
+                                 var timestamp = row.key[0],
+                                     owner = row.key[1],
+                                     trace_id = row.key[2],
+                                     message = row.value;
+                                 var datetime =
+                                   dateFormat (new Date (timestamp),
+                                               'mmm dd, yyyy HH:MM:ss.L');
+                                 return "<li>"
+                                 + "<span class='datetime'>"+datetime+"</span>"
+                                 + "<span class='separator1'> - </span>"
+                                 + "<span class='owner'>"
+                                 +owner+":"+trace_id
+                                 + "</span>"
+                                 + "<span class='separator1'> - </span>"
+                                 + "<span class='message'>"+message+"</span>"
+                                 + "</li>";
+                                 });
+                           var data =
+                                "<h3>Recent Traces</h3>"
+                              + "<ul>"
+                              + inner.join ("");
+                              + "</ul>";
+                          $("#activity").html (data);
+                        }
+                    });
+                    */
+        }
+      function loadOwners ()
+        {
+          $("#owner").autocomplete({
+            source: function (req, add){
+              $.getJSON("/trace?callback=?", req, function (data) {
+                var suggestions = [];
+                $.each(data, function(i,val) {
+                   suggestions.push(val.label);
+                });
+                add(suggestions);
+              });
+            },
+            select: function (e, ui) {
+              $("#trace_id").focus();
+            }
+          });
+        }
+
+      function loadTraces (owner)
+        {
+         $("#trace_id").autocomplete({
+           source: function (req, add){
+             $.getJSON("/trace/".concat(owner).concat("?callback=?"), req,
+               function (data) {
+                 var suggestions = [];
+                 $.each(data, function(i,val) {
+                    suggestions.push(val.label);
+                 });
+                 add(suggestions);
+               });
+           },
+           select: function (e, ui) {
+             $("#trace_id").blur();
+           }
+        });
+
+       }
+      function loadLog (owner, trace_id)
+        {
+          if (owner !== "Owner" && owner !== ""
+              && trace_id !== "Trace Id" && trace_id !== "")
+            {
+              $.ajax({
+                url: "/trace/".concat(owner).concat("/").concat(trace_id)
+                }).done (function (json) {
+                           var data = json2messages (json);
+                            $("#activity").html (
+                               "<h3>Trace for "+owner+":"+trace_id+"</h3>"
+                               +data);
+                         });
+            }
+        }
+
+      function setupEventHandlers () {
+        /* handlers for form */
+        $("#owner").focus (function() {
+                             $(this).val('');
+                             $("#trace_id").val('');
+                           });
+
+        $("#trace_id").focus (function() {
+                                var owner = $("#owner").val();
+                                $(this).val('');
+                                loadTraces (owner);
+                              });
+        $("#trace_id").blur (function () {
+                               var owner = $("#owner").val();
+                               var trace_id = $(this).val();
+                               loadLog (owner, trace_id);
+                             });
+        $("#load-trace").click (function () {
+                                  var owner = $("#owner").val();
+                                  var trace_id = $("#trace_id").val();
+                                  loadLog (owner, trace_id);
+                                });
+
+        $("#recent-traces").click (function () {
+                                     $("#owner").val('Owner');
+                                     $("#trace_id").val('Trace Id');
+                                     loadRecent ();
+                                   });
+
+        /* handlers for tree */
+        $('.toload').live ("click", function() {
+          var doc_id = this.id;
+          var loc = "#"+doc_id+"_val";
+          var row = "#"+doc_id;
+          // load the content if not already loaded
+          if ($(row).hasClass("toload"))
+            {
+              var owner = $("#owner").val();
+              var trace_id = $("#trace_id").val();
+              $.ajax({
+                url: "/trace/".concat(owner).concat("/").concat(trace_id).concat("/").concat(doc_id)
+                }).done(function (data) { $(loc).html(json2divs(data)); });
+              $(row).removeClass("toload");
+            }
+          });
+        $('.key').live ("click", function () {
+          var key_id = this.id;
+          var row_id = key_id.substr(0,key_id.lastIndexOf("_key"));
+          var value = "#"+row_id+"_val";
+          var key = "#"+key_id;
+          if (! $(key).hasClass("none"))
+            {
+              if ($(value).is(":visible"))
+                {
+                  $(value).hide();
+                  $(key).removeClass ("open");
+                  $(key).addClass ("closed");
+                }
+              else
+                {
+                  $(value).show();
+                  $(key).removeClass ("closed");
+                  $(key).addClass ("open");
+                }
+            }
+          });
+      }
+
+      setupEventHandlers ();
+      loadOwners ();
+      var url_params = $.getUrlVars();
+      if (url_params['to'])
+        {
+          var owner = url_params['to'];
+          $("#owner").val(owner);
+          loadTraces (owner);
+          if (url_params['ti'])
+            {
+              var trace_id = url_params['ti'];
+              $("#trace_id").val(trace_id);
+              loadLog (owner, trace_id);
+            }
+        }
+      else
+        {
+          loadRecent ();
+        }
+    });
+  </script>
+</html>
