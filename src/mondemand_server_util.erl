@@ -1,14 +1,16 @@
--module(mondemand_util).
+-module(mondemand_server_util).
 
 -include_lib ("lwes/include/lwes.hrl").
 -include_lib ("kernel/include/file.hrl").
 
 -compile({parse_transform, ct_expand}).
 
--export ([epoch_to_mdyhms/1,
+-export ([seconds_since_epoch/0,
+          epoch_to_mdyhms/1,
           mdyhms_to_dir_prefix/1,
           mdyhms_to_log_string/1,
           mkdir_p/1,
+          construct_context/1,
           construct_context_string/2,
           join/2,
           stat_key/1,
@@ -21,8 +23,15 @@
           log_priority_key/1,
           log_message_key/1,
           log_repeat_key/1,
-          priority_string/1
+          priority_string/1,
+          initialize_stats/1,
+          increment_stat/2,
+          increment_stat/3
         ]).
+
+seconds_since_epoch () ->
+  {Mega, Secs, _ } = os:timestamp(),
+  Mega * 1000000 + Secs.
 
 epoch_to_mdyhms(MilliSeconds) ->
   calendar:now_to_universal_time (
@@ -54,24 +63,28 @@ mkdir_p (Dir) ->
   ok = filelib:ensure_dir (Dir),
   case file:make_dir (Dir) of
     ok -> ok;
-    {error, eexist} -> ok
+    {error, eexist} -> ok;
+    E -> E
   end.
 
-construct_context_string (#lwes_event { attrs = Data }, Delimiter) ->
+
+construct_context (#lwes_event { attrs = Data }) ->
   CtxtNum =
     case dict:find (<<"ctxt_num">>, Data) of
       error -> 0;
       {ok, C} -> C
     end,
-  Context =
-    lists:keysort (1,
-      lists:map (
-        fun (N) ->
-          K = dict:fetch (ctxt_key (N), Data),
-          V = dict:fetch (ctxt_val (N), Data),
-          {K,V}
-        end,
-        lists:seq (1,CtxtNum))),
+  lists:map (
+    fun (N) ->
+      K = dict:fetch (ctxt_key (N), Data),
+      V = dict:fetch (ctxt_val (N), Data),
+      {K,V}
+    end,
+    lists:seq (1,CtxtNum)
+  ).
+
+construct_context_string (Event, Delimiter) ->
+  Context = lists:keysort (1, construct_context (Event)),
   {Host, C1} =
      lists:foldl (fun ({<<"host">>,H}, {_,A}) -> {H,A};
                       ({K,V},{H,A}) -> {H,[[K,"=",V]|A]}
@@ -81,7 +94,7 @@ construct_context_string (#lwes_event { attrs = Data }, Delimiter) ->
   {Host, ContextString}.
 
 join (L,S) when is_list (L) ->
-  join (L, S, []).
+  lists:reverse (join (L, S, [])).
 
 join ([], _, A) ->
   A;
@@ -145,3 +158,15 @@ priority_string (6) -> <<"info">>;
 priority_string (7) -> <<"debug">>;
 priority_string (8) -> <<"all">>.
 
+initialize_stats (Keys) ->
+  lists:foldl (fun (E, D) ->
+                 dict:update_counter (E, 0, D)
+               end,
+               dict:new (),
+               Keys).
+
+increment_stat (Key, Stats) ->
+  dict:update_counter (Key, 1, Stats).
+
+increment_stat (Key, Amount, Stats) ->
+  dict:update_counter (Key, Amount, Stats).

@@ -1,3 +1,29 @@
+* Tue Oct 08 2013 Anthony Molinaro <anthonym@alumni.caltech.edu> 1.1.0
+- integrate webmachine and the file based trace console
+
+* Wed Sep 18 2013 Anthony Molinaro <anthonym@alumni.caltech.edu> 1.0.2
+- numeric trace ids sometimes come in which breaks the trace, so normalize
+to binary
+
+* Wed Sep 11 2013 Anthony Molinaro <anthonym@alumni.caltech.edu> 1.0.1
+- need to ensure all apps for backends get a chance to start ahead of
+the supervisor
+
+* Tue Sep 10 2013 Anthony Molinaro <anthonym@alumni.caltech.edu> 1.0.0
+- moved rrd stats backend and couchdb trace backend into separate packages
+- make a behaviour for backends
+- make a file based trace backend
+
+* Fri Sep 06 2013 Anthony Molinaro <anthonym@alumni.caltech.edu> 0.4.1
+- check for errors at rrd creation time
+
+* Fri Sep 06 2013 Anthony Molinaro <anthonym@alumni.caltech.edu> 0.4.0
+- protect against a few common errors
+- keep track of error counts from each backend
+
+* Wed Jun 12 2013 Anthony Molinaro <anthonym@alumni.caltech.edu> 0.3.0
+- utility function to get context as a proplist
+
 * Tue Nov 20 2012 Anthony Molinaro <anthonym@alumni.caltech.edu> 0.2.0
 - new version as a package
 

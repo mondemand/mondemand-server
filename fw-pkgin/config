@@ -2,7 +2,7 @@
 # variable FW_PACKAGE_DEFAULT_MAINTAINER if non-empty at init time
 
 FW_PACKAGE_NAME="mondemand-server"
-FW_PACKAGE_VERSION="0.2.0"
+FW_PACKAGE_VERSION="1.1.0"
 FW_PACKAGE_MAINTAINER="Anthony Molinaro <anthony.molinaro@openx.org>"
 FW_PACKAGE_SHORT_DESCRIPTION="A Server for dealing with mondemand events"
 FW_PACKAGE_DESCRIPTION=`cat README`
@@ -15,20 +15,20 @@ FW_PACKAGE_ARCHITECTURE_DEPENDENT="1"
 # For other packaging systems, the syntax is translated for you.
 
 FW_PACKAGE_DEPENDS="
-  crypto_starter,
-  lwes-erlang (>= 2.2.0),
-  couchbeam (>= 0.7.3.0),
-  erlrrd (>= 0.5.0.0)"
+  lwes-erlang (>= 2.2.0) | erlang-r15b-lwes (>= 2.2.0),
+  mochiweb (>= 2.6.0) | erlang-r15b-mochiweb (>= 2.6.0),
+  webmachine (>= 1.10.3) | erlang-r15b-webmachine (>= 1.10.3)
+"
 FW_PACKAGE_CONFLICTS=""
 FW_PACKAGE_PROVIDES=""
 FW_PACKAGE_REPLACES=""
 FW_PACKAGE_SUGGESTS=""
 
 FW_PACKAGE_BUILD_DEPENDS="
-  crypto_starter,
-  lwes-erlang (>= 2.2.0),
-  couchbeam (>= 0.7.3.0),
-  erlrrd (>= 0.5.0.0)"
+  lwes-erlang (>= 2.2.0) | erlang-r15b-lwes (>= 2.2.0),
+  mochiweb (>= 2.6.0) | erlang-r15b-mochiweb (>= 2.6.0),
+  webmachine (>= 1.10.3) | erlang-r15b-webmachine (>= 1.10.3)
+"
 FW_PACKAGE_BUILD_CONFLICTS=""
 
 # dupload is used for submitting debian packages to a package archive
@@ -57,10 +57,7 @@ FW_RPM_CREATEREPO_INCREMENTAL=${FW_RPM_CREATEREPO_INCREMENTAL-"auto"}
 # these commands will be run after a successful createrepo run
 FW_RPM_POSTCREATEREPO_COMMANDS=${FW_RPM_POSTCREATEREPO_COMMANDS-"true"}
 # here's a suggestion:
-# FW_RPM_POSTCREATEREPO_COMMANDS="gpg --detach-sign --armor repodata/repomd.xml" 
-
-# set to the directory in which version-named tags will be created
-FW_SUBVERSION_TAG_ROOT="https://mondemand.svn.sourceforge.net/svnroot/mondemand/mondemand-server/tags"
+# FW_RPM_POSTCREATEREPO_COMMANDS="gpg --detach-sign --armor repodata/repomd.xml"
 
 # uncomment and set manually if you want the application name to be different
 # from FW_PACKAGE_NAME, application name must consist of characters [a-zA-Z_]
@@ -89,18 +86,12 @@ FW_ERL_APP_NAME="mondemand_server"
 
 # uncomment to define the application environment variables. should be an 
 # erlang expression which evaluates to a list.
-FW_ERL_APP_ENVIRONMENT="[
-  {journal_dir,\"/mnt/mondemand-journaller/journals/incoming/\"},
-  {journal_name,\"all_events.log\"},
-  {rotation_interval, 60},
-  {listener,{\"127.0.0.1\",20402}},
-  {couch, {\"localhost\",5984}}
-]"
+# FW_ERL_APP_ENVIRONMENT="[ ]"
 
 # uncomment to indicate additional OTP applications (besides kernel and stdlib)
 # that this application depends upon.  should be an erlang expression which 
 # evaluates to a list.
-FW_ERL_PREREQ_APPLICATIONS_EXTRA="[crypto,lwes,mochiweb,ibrowse,couchbeam,erlrrd]"
+FW_ERL_PREREQ_APPLICATIONS_EXTRA="[lwes, crypto, inets, public_key, ssl, xmerl, compiler, syntax_tools, mochiweb, webmachine]"
 
 # uncomment to add arbitrary extra content to the app file, e.g., an
 # included application directive.  should be an erlang expression which 

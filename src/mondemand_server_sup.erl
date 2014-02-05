@@ -3,10 +3,10 @@
 -behaviour (supervisor).
 
 %% API
--export([start_link/0]).
+-export ([start_link/0]).
 
 %% supervisor callbacks
--export([init/1]). 
+-export ([init/1]). 
 
 %%====================================================================
 %% API functions
@@ -23,50 +23,62 @@ start_link() ->
 %% @doc supervisor callback.
 init([]) ->
   Dispatch =
-    case application:get_env (mondemand_server, dispatch) of
-      { ok, D } -> D;
-      undefined -> exit(no_dispatch_list)
+    case mondemand_server_config:dispatch () of
+      [] -> exit (no_dispatch_list);
+      L -> L
     end,
 
-  % split the dispatch list into the wildcard rule and others
-  { [{"*",AllList}], NotAllList } =
-    lists:splitwith(fun({"*",_})-> true; (_) -> false end, Dispatch),
-
-  % add the wildcard rule to the others
-  FinalDispatch =
-    lists:map (fun ({K,VL}) ->
-                 {list_to_binary (K), lists:append (VL, AllList)}
-               end,
-               NotAllList),
-
-  UniquedModules =
-    lists:usort(lists:flatten(lists:foldl(fun({_,L},A)-> [L|A] end,
-                                          [], FinalDispatch))),
+  BackendConfigs =
+    [ begin
+        BackendConfig =
+          case application:get_env (mondemand_server, BackendModule) of
+            { ok, T } -> T;
+            undefined -> []
+          end,
+        { BackendModule,
+          { BackendModule, start_link, [BackendConfig] },
+          permanent,
+          2000,
+          worker,
+          [ BackendModule ]
+        }
+      end
+      || BackendModule
+      <- mondemand_server_config:backends_to_start ()
+    ],
 
   ToStart =
     {
       { one_for_one, 10, 10 },
+      BackendConfigs ++
       [
+        { webmachine_mochiweb,
+          { webmachine_mochiweb, start,
+            [mondemand_server_config:web_config ()]},
+          permanent,
+          5000,
+          worker,
+          dynamic
+        },
         {
           mondemand_server,
-          { mondemand_server, start_link, [FinalDispatch] },
+          { mondemand_server, start_link, [Dispatch] },
           permanent,
           2000,
           worker,
           [ mondemand_server ]
         }
-        |
-        [ begin
-            C =
-              case application:get_env (mondemand_server, M) of
-                { ok, T } -> T;
-                undefined -> []
-              end,
-            { M, { M, start_link, [C] }, permanent, 2000, worker, [ M ] }
-          end
-          || M <- UniquedModules ]
       ]
     },
-  error_logger:info_msg ("Starting ~p",[ToStart]),
   { ok, ToStart }.
 
+%%--------------------------------------------------------------------
+%%% Test functions
+%%--------------------------------------------------------------------
+-ifdef(HAVE_EUNIT).
+-include_lib("eunit/include/eunit.hrl").
+-endif.
+
+-ifdef(EUNIT).
+
+-endif.

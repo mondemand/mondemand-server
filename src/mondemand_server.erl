@@ -33,7 +33,12 @@ process_event (Event, State = #listener_state { dispatch = Dispatch }) ->
   case dict:find (EventName, Dispatch) of
     {ok, V} -> [ M:process(Event) || M <- V ];
     error ->
-      error_logger:error_msg ("No handler for event ~p in dispatch~n~p",[EventName, Dispatch])
+      case dict:find ("*", Dispatch) of
+        {ok, DV} -> [ M:process(Event) || M <- DV ];
+        error ->
+          error_logger:error_msg ("No handler for event ~p in dispatch~n~p",
+                                  [EventName, Dispatch])
+      end
   end,
   State.
 

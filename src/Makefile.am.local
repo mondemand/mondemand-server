@@ -1,7 +1,11 @@
 # put whatever (auto)make commands here, they will be included from Makefile.am
 
+# someday maybe this can be removed
+DIALYZERFLAGS += -Wno_undefined_callbacks
+
 dist_erlappsrc_DATA = 		\
-  $(wildcard *.erl) \
+  mondemand_server_backend.erl \
+  $(filter-out mondemand_server_backend.erl,$(wildcard *.erl)) \
   $(wildcard *.xrl) \
   $(wildcard *.yrl) \
   $(patsubst %.xrl,%.erl,$(wildcard *.xrl)) \
