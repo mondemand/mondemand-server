@@ -1,8 +1,0 @@
-# put whatever (auto)make commands here, they will be included from Makefile.am
-confdir = /etc/mondemand
-dist_conf_DATA = mondemand_server.config
-
-include $(top_srcdir)/Makefile.otp
-
-appprivdir="$(erlappdir)"
-nobase_dist_apppriv_DATA = $(shell if test -d priv -o -h priv ; then find priv -follow -type f ; fi)
