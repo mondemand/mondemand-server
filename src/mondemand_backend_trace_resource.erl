@@ -142,7 +142,7 @@ list_ids (Prefix, Root) ->
 
 list_traces (Root) ->
   {ok, Filenames} = file:list_dir (Root),
-  Entries = [ process_file (Root, F) || F <- Filenames ],
+  Entries = lists:flatten ([ process_file (Root, F) || F <- Filenames ]),
   Sorted = [ E || {_, E} <- lists:keysort (1, Entries) ],
   Index =
         [ { "total_rows", length (Filenames) },
@@ -152,23 +152,32 @@ list_traces (Root) ->
   list_to_binary (lwes_mochijson2:encode (Index)).
 
 process_file (Root, File) ->
-  {ok, Bin} = file:read_file(filename:join ([Root, File])),
-  Json = lwes_mochijson2:decode (Bin, [{format, proplist}]),
-  ProgId = proplists:get_value (<<"mondemand.prog_id">>, Json),
-  TraceOwner = proplists:get_value (<<"mondemand.owner">>, Json),
-  TraceId = proplists:get_value (<<"mondemand.trace_id">>, Json),
-  Message = proplists:get_value (<<"mondemand.message">>, Json),
-  Host = proplists:get_value (<<"mondemand.src_host">>, Json),
-  ReceiptTime = proplists:get_value (<<"ReceiptTime">>, Json),
-  { ReceiptTime,
-    [ {"id", list_to_binary (File)},
-      {"key", [ TraceOwner, TraceId ] },
-      {"value", [ { "prog_id", ProgId },
-                  { "host", Host },
-                  { "message", Message},
-                  { "timestamp", ReceiptTime } ] }
-    ]
-  }.
+  FileName = filename:join ([Root, File]),
+  {ok, Bin} = file:read_file (FileName),
+  try
+    lwes_mochijson2:decode (Bin, [{format, proplist}])
+  of
+    Json ->
+      ProgId = proplists:get_value (<<"mondemand.prog_id">>, Json),
+      TraceOwner = proplists:get_value (<<"mondemand.owner">>, Json),
+      TraceId = proplists:get_value (<<"mondemand.trace_id">>, Json),
+      Message = proplists:get_value (<<"mondemand.message">>, Json),
+      Host = proplists:get_value (<<"mondemand.src_host">>, Json),
+      ReceiptTime = proplists:get_value (<<"ReceiptTime">>, Json),
+      { ReceiptTime,
+        [ {"id", list_to_binary (File)},
+          {"key", [ TraceOwner, TraceId ] },
+          {"value", [ { "prog_id", ProgId },
+                      { "host", Host },
+                      { "message", Message},
+                      { "timestamp", ReceiptTime } ] }
+        ]
+      }
+  catch
+    _:_ ->
+      error_logger:error_msg ("Failed to parse ~p with mochijson",[FileName]),
+      []
+  end.
 
 list_files (Prefix, Dir) ->
   AllFiles =
