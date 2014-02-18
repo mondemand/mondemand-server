@@ -12,7 +12,7 @@
 %% API functions
 %%====================================================================
 start () ->
-  Apps = lists:append ( [ [ sasl, lwes, crypto, inets,
+  Apps = lists:append ( [ [ sasl, lwes, crypto, inets, asn1,
                             public_key, ssl, xmerl, compiler,
                             syntax_tools, mochiweb, webmachine ],
                           mondemand_server_config:applications_to_start(),
