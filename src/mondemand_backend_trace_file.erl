@@ -8,6 +8,7 @@
 %% mondemand_backend callbacks
 -export ([ start_link/1,
            process/1,
+           process_tcp/2,
            stats/0,
            required_apps/0
          ]).
@@ -32,6 +33,9 @@
 %%====================================================================
 start_link (Config) ->
   gen_server:start_link ( { local, ?MODULE }, ?MODULE, Config, []).
+
+process_tcp (Metadata, Event) ->
+  gen_server:cast (?MODULE, {process_tcp, Metadata, Event}).
 
 process (Event) ->
   gen_server:cast (?MODULE, {process, Event}).
@@ -76,11 +80,35 @@ handle_call (Request, From, State) ->
                             [?MODULE, Request, From]),
   { reply, ok, State }.
 
-handle_cast ({process, Binary},
-             State = #state { root = Dir,
-                              fields = Fields,
-                              stats = Stats }) ->
+handle_cast ({process_tcp, Metadata, Binary}, State) ->
+  {Event0} =  lwes_event:from_binary (Binary, json_eep18),
+  Event = { Event0 ++ Metadata }, 
+  ProcessedEvent = join_split_fields (Event),
+  process_trace (ProcessedEvent, State);
+handle_cast ({process, Binary}, State) ->
   Event =  lwes_event:from_udp_packet (Binary, json_eep18),
+  process_trace (Event, State);
+handle_cast (Request, State) ->
+  error_logger:warning_msg ("~p : Unrecognized cast ~p~n",[?MODULE, Request]),
+  { noreply, State }.
+
+handle_info (Request, State) ->
+  error_logger:warning_msg ("~p : Unrecognized info ~p~n",[?MODULE, Request]),
+  { noreply, State }.
+
+terminate (_Reason, _State) ->
+  ok.
+
+code_change (_OldVsn, State, _Extra) ->
+  { ok, State }.
+
+%%====================================================================
+%% Internal
+%%====================================================================
+process_trace (Event, 
+               State = #state { root = Dir,
+                                fields = Fields,
+                                stats = Stats }) -> 
   NewStats =
     case Event of
       {PL} when is_list (PL) ->
@@ -117,25 +145,40 @@ handle_cast ({process, Binary},
         mondemand_server_util:increment_stat (errors, Stats)
     end,
 
-  { noreply, State#state { stats = NewStats } };
+  { noreply, State#state { stats = NewStats } }.
 
-handle_cast (Request, State) ->
-  error_logger:warning_msg ("~p : Unrecognized cast ~p~n",[?MODULE, Request]),
-  { noreply, State }.
+join_split_fields ({Attrs}) ->
+  SortedAttrs = lists:reverse (lists:keysort (1, Attrs)),
+  JoinedAttrs = 
+    lists:foldl (
+                 fun ({K, V}, A) 
+                  -> case re:run (K, "-[0-9]*$") of
+                       {match, [{Index, _}]}
+                         ->
+                           FieldName = prefix (K, Index),
+                           prepend_to_existing (
+                             A, FieldName, V); 
+                       nomatch
+                         -> [{K,V} | A]
+                     end 
+               end,
+               [],
+               SortedAttrs),
+  {JoinedAttrs}.
 
-handle_info (Request, State) ->
-  error_logger:warning_msg ("~p : Unrecognized info ~p~n",[?MODULE, Request]),
-  { noreply, State }.
+prefix (S, Length) when is_binary (S) ->
+  {P, _} = split_binary (S, Length), P;
+prefix (S, Length) when is_list (S) ->
+  string:substr (S, 1, Length).
 
-terminate (_Reason, _State) ->
-  ok.
+prepend_to_existing (Attrs, K, V) ->
+  case proplists:get_value (K, Attrs) of
+    undefined -> [{K,V} | Attrs];
+    EV -> [{K, <<V/binary, EV/binary>>} 
+           |
+           proplists:delete (K, Attrs)]
+  end.
 
-code_change (_OldVsn, State, _Extra) ->
-  { ok, State }.
-
-%%====================================================================
-%% Internal
-%%====================================================================
 attempt_write (Dir, Owner, Id, ReceiptTime, ProgId, ExtraFields,
                Event, Num) ->
   attempt_write (Dir, Owner, Id, ReceiptTime, ProgId, ExtraFields,
