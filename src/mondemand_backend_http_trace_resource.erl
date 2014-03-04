@@ -22,9 +22,11 @@ to_html (ReqData, State) ->
   { <<"Get Called">>, ReqData , State }.
 
 process_post (ReqData, State) ->
-  mondemand_backend_trace_file:process_tcp
-    (request_metadata (ReqData), 
-     wrq:req_body(ReqData)),
+  mondemand_backend_trace_file:process
+    ( { udp, none, 
+        request_ip (ReqData), 
+        server_port (),  
+        wrq:req_body (ReqData) } ),
   {true, ReqData, State}.
 
 finish_request (ReqData, State) ->
@@ -36,19 +38,14 @@ finish_request (ReqData, State) ->
 %%--------------------------------------------------------------------
 %%% Test functions
 %%--------------------------------------------------------------------
-request_metadata (ReqData) ->
- [{ <<"SenderIP">>, list_to_binary(wrq:peer(ReqData)) },
-  { <<"SenderPort">>, server_port() },
-  { <<"ReceiptTime">>, millisecond_since_epoch () }].
+
+request_ip (ReqData) -> 
+  {ok, Ip} = inet_parse:address (wrq:peer (ReqData)),
+  Ip.
 
 server_port () ->
   proplists:get_value (port, 
     mondemand_server_config:web_config()).
-
-millisecond_since_epoch () ->
-  {Meg, Sec, Mic} = os:timestamp(),
-  trunc (Meg * 1000000000 + Sec * 1000 + Mic / 1000).
-
 
 -ifdef(HAVE_EUNIT).
 -include_lib("eunit/include/eunit.hrl").
