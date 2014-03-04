@@ -1,10 +1,21 @@
 -module (mondemand_server_config).
 
--export ([ dispatch/0,
+-export ([ get_dispatch/1,
+           set_dispatch/0,
            backends_to_start/0,
            applications_to_start/0,
            web_config/0
          ]).
+
+set_dispatch () ->
+  Dispatch = dispatch(),
+  mochiglobal:put (mondemand_dispatch_list, Dispatch),
+  mochiglobal:put (mondemand_dispatch_dict, dict:from_list (Dispatch)).
+
+get_dispatch (list) ->
+  mochiglobal:get (mondemand_dispatch_list);
+get_dispatch (dict) ->
+  mochiglobal:get (mondemand_dispatch_dict).
 
 dispatch () ->
   % the application needs to be loaded in order to see the variables for
@@ -42,7 +53,9 @@ dispatch () ->
   end.
 
 backends_to_start () ->
-  case dispatch () of
+  set_dispatch(),
+
+  case get_dispatch (list) of
     [] -> [];
     Dispatch ->
       % determine the unique list of modules to start from the dispatch list

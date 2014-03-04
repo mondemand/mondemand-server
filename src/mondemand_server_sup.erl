@@ -22,8 +22,9 @@ start_link() ->
 %% @spec init([]) -> SupervisorTree
 %% @doc supervisor callback.
 init([]) ->
+  mondemand_server_config:set_dispatch (),
   Dispatch =
-    case mondemand_server_config:dispatch () of
+    case mondemand_server_config:get_dispatch (list) of
       [] -> exit (no_dispatch_list);
       L -> L
     end,

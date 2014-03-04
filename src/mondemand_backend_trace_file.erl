@@ -77,9 +77,9 @@ handle_call (Request, From, State) ->
   { reply, ok, State }.
 
 handle_cast ({process, Binary},
-             State = #state{ root = Dir,
-                             fields = Fields,
-                             stats = Stats }) ->
+             State = #state { root = Dir,
+                              fields = Fields,
+                              stats = Stats }) ->
   Event =  lwes_event:from_udp_packet (Binary, json_eep18),
   NewStats =
     case Event of
@@ -116,7 +116,6 @@ handle_cast ({process, Binary},
       _ ->
         mondemand_server_util:increment_stat (errors, Stats)
     end,
-
   { noreply, State#state { stats = NewStats } };
 handle_cast (Request, State) ->
   error_logger:warning_msg ("~p : Unrecognized cast ~p~n",[?MODULE, Request]),

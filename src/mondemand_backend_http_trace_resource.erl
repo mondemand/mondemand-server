@@ -22,11 +22,12 @@ to_html (ReqData, State) ->
   { <<"Get Called">>, ReqData , State }.
 
 process_post (ReqData, State) ->
-  mondemand_backend_trace_file:process
+  mondemand_server:process
     ( { udp, none, 
         request_ip (ReqData), 
         server_port (),  
-        wrq:req_body (ReqData) } ),
+        wrq:req_body (ReqData) },
+      mondemand_server_config:get_dispatch (dict)),
   {true, ReqData, State}.
 
 finish_request (ReqData, State) ->
