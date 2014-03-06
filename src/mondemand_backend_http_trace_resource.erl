@@ -1,11 +1,9 @@
 -module (mondemand_backend_http_trace_resource).
 
 -export ([ init/1,
-           content_types_provided/2,
            finish_request/2,
            allowed_methods/2,
-           process_post/2,
-           to_html/2
+           process_post/2
          ]).
 
 -include_lib ("webmachine/include/webmachine.hrl").
@@ -14,12 +12,6 @@ init (_) -> { ok, []}.
 
 allowed_methods (ReqData, State) ->
   {['POST'], ReqData, State}.
-
-content_types_provided (ReqData, State) ->
-  {[{"text/html", to_html}], ReqData, State}.
-
-to_html (ReqData, State) ->
-  { <<"Get Called">>, ReqData , State }.
 
 process_post (ReqData, State) ->
   mondemand_server:process
