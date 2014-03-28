@@ -1,4 +1,4 @@
--module (mondemand_backend_http_trace_resource).
+-module (mondemand_http_resource).
 
 -export ([ init/1,
            finish_request/2,

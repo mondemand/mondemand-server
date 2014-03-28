@@ -1,5 +1,5 @@
 * Wed Mar 05 2014 Vikram Kadi <vikram.kadi@gmail.com> 1.2.0
-- support to recieve trace events over http on the endpoint /tcp
+- support to receive trace events over http on the endpoint /tcp
 - updated the lwes version that supports long strings
 
 * Wed Feb 05 2014 Anthony Molinaro <anthonym@alumni.caltech.edu> 1.1.1
