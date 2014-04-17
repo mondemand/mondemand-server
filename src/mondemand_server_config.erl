@@ -4,7 +4,8 @@
            set_dispatch/0,
            backends_to_start/0,
            applications_to_start/0,
-           web_config/0
+           web_config/0,
+           backend_config/1
          ]).
 
 set_dispatch () ->
@@ -93,6 +94,12 @@ web_config () ->
   InitialDispatch = proplists:get_value (dispatch , C, []),
   lists:keystore (dispatch, 1, C,
                   {dispatch, calculate_web_dispatch (InitialDispatch)}).
+
+backend_config (BackendModule) ->
+  case application:get_env (mondemand_server, BackendModule) of
+    { ok, T } -> T;
+    undefined -> []
+  end.
 
 %%--------------------------------------------------------------------
 %%% Internal functions

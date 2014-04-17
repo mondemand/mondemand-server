@@ -31,13 +31,9 @@ init([]) ->
 
   BackendConfigs =
     [ begin
-        BackendConfig =
-          case application:get_env (mondemand_server, BackendModule) of
-            { ok, T } -> T;
-            undefined -> []
-          end,
         { BackendModule,
-          { BackendModule, start_link, [BackendConfig] },
+          { BackendModule, start_link,
+            [mondemand_server_config:backend_config (BackendModule)] },
           permanent,
           2000,
           worker,
