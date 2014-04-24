@@ -6,6 +6,7 @@
            call/2,
            sidejob_name/1,
            sidejob_unname/1,
+           stats_by_worker/1,
            stats/1
          ]).
 
@@ -39,7 +40,22 @@ call (Module, Msg) ->
 cast (Module, Msg) ->
   sidejob:cast (sidejob_name (Module), Msg).
 
-stats (Module) ->
+stats_by_worker (Module) ->
   SideJobModule = sidejob_name (Module),
   Workers = tuple_to_list (SideJobModule:workers ()),
   [ {W, gen_server:call (W, {stats})} || W <- Workers ].
+
+stats (Module) ->
+  SideJobModule = sidejob_name (Module),
+  Workers = tuple_to_list (SideJobModule:workers ()),
+  Stats =
+    lists:foldl ( fun (Dict, Accum) ->
+                    dict:merge (fun (_, Value1, Value2) ->
+                                  Value1 + Value2
+                                end,
+                                Dict,
+                                Accum)
+                  end,
+                  dict:new (),
+                  [ gen_server:call (W, {stats}) || W <- Workers ]),
+  Stats.
