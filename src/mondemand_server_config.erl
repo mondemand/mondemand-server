@@ -90,10 +90,14 @@ calculate_web_dispatch (InitialDispatch) ->
   OutputDispatch.
 
 web_config () ->
-  {ok, C} = application:get_env (mondemand_server, web),
-  InitialDispatch = proplists:get_value (dispatch , C, []),
-  lists:keystore (dispatch, 1, C,
-                  {dispatch, calculate_web_dispatch (InitialDispatch)}).
+  case application:get_env (mondemand_server, web) of
+    {ok, C} ->
+      InitialDispatch = proplists:get_value (dispatch , C, []),
+      lists:keystore (dispatch, 1, C,
+                      {dispatch, calculate_web_dispatch (InitialDispatch)});
+    undefined ->
+      undefined
+  end.
 
 backend_config (BackendModule) ->
   case application:get_env (mondemand_server, BackendModule) of

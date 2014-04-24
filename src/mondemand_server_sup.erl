@@ -43,20 +43,26 @@ init([]) ->
       || BackendModule
       <- mondemand_server_config:backends_to_start ()
     ],
+  WebConfig =
+    case mondemand_server_config:web_config () of
+      undefined -> [];
+      WC ->
+        [
+          { webmachine_mochiweb,
+            { webmachine_mochiweb, start, [WC]},
+            permanent,
+            5000,
+            worker,
+            dynamic
+          }
+        ]
+    end,
 
   ToStart =
     {
       { one_for_one, 10, 10 },
-      BackendConfigs ++
+      BackendConfigs ++ WebConfig ++
       [
-        { webmachine_mochiweb,
-          { webmachine_mochiweb, start,
-            [mondemand_server_config:web_config ()]},
-          permanent,
-          5000,
-          worker,
-          dynamic
-        },
         {
           mondemand_server,
           { mondemand_server, start_link, [Dispatch] },
