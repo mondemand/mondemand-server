@@ -13,16 +13,11 @@
            code_change/3
          ]).
 
--record (state, { socket,
-                  host,
-                  port,
-                  transport,
+-record (state, { transport,
+                  transport_mod,
                   prefix,
-                  connect_timeout,
-                  send_timeout,
-                  proto,
                   name,
-                  modfun,
+                  stat_modfun,
                   reconnect_min,
                   reconnect_max,
                   reconnect_time = 0,
@@ -46,16 +41,12 @@ init ([Name]) ->
   % config is grabbed from the server
   Config = mondemand_server_config:backend_config (ConfigKey),
 
-  Host = proplists:get_value (host, Config, undefined),
-  Port = proplists:get_value (port, Config, undefined),
-  Transport = proplists:get_value (transport, Config, tcp),
-  ConnectTimeout = proplists:get_value (connect_timeout, Config, 5000),
-  SendTimeout = proplists:get_value (send_timeout, Config, 5000),
+  TransportMod = proplists:get_value (transport_mod, Config, undefined),
+
   Prefix = proplists:get_value (prefix, Config),
-  Proto = proplists:get_value (proto, Config, 1),
   ReconnectMin = proplists:get_value (reconnect_min, Config, 10),
   ReconnectMax = proplists:get_value (reconnect_max, Config, 30000),
-  ModFun = proplists:get_value (modfun, Config, undefined),
+  ModFun = proplists:get_value (stat_modfun, Config, undefined),
 
   { ValidModFun, {Mod, Fun} } =
     case is_tuple (ModFun) andalso tuple_size (ModFun) =:= 2 of
@@ -70,23 +61,25 @@ init ([Name]) ->
         {false, {undefined, undefined} }
     end,
 
-  case ValidModFun andalso Host =/= undefined andalso Port =/= undefined of
+  case ValidModFun of
     true ->
-      State = #state { host = Host,
-                       port = Port,
-                       transport = Transport,
-                       connect_timeout = ConnectTimeout,
-                       send_timeout = SendTimeout,
-                       prefix = Prefix,
-                       proto = Proto,
-                       name = Name,
-                       modfun = fun Mod:Fun/8,
-                       reconnect_min = ReconnectMin,
-                       reconnect_max = ReconnectMax
-                      },
-      { ok, try_connect (State) };
+      case TransportMod:init (Config) of
+        {ok, Transport} ->
+          State = #state {
+                    transport = Transport,
+                    transport_mod = TransportMod,
+                    prefix = Prefix,
+                    name = Name,
+                    stat_modfun = fun Mod:Fun/8,
+                    reconnect_min = ReconnectMin,
+                    reconnect_max = ReconnectMax
+                  },
+          { ok, try_connect (State) };
+        E ->
+          {stop, E}
+      end;
     false ->
-      { stop, config_missing_host_or_port_or_modfun }
+      { stop, bad_stat_modfun }
    end.
 
 handle_call ({stats}, _From,
@@ -112,47 +105,45 @@ handle_call (Request, From, State) ->
 % thus the reconnecting logic, so we still process the event to figure
 % out how many we are dropping then just increment a counter
 handle_cast ({process, Binary},
-             State = #state { socket = undefined,
+             State = #state { transport = Transport,
+                              transport_mod = TransportMod,
                               prefix = Prefix,
-                              modfun = ModFun,
-                              events_processed = EventProcessed,
-                              stats_dropped_count = StatsDropped
-                            }) ->
-  {Num, _} = process_event (Prefix, Binary, ModFun),
-  { noreply,
-    State#state { events_processed = EventProcessed + 1,
-                  stats_dropped_count = StatsDropped + Num
-                }
-  };
-handle_cast ({process, Binary},
-             State = #state { socket = Socket,
-                              host = Host,
-                              port = Port,
-                              transport = Transport,
-                              prefix = Prefix,
-                              modfun = ModFun,
+                              stat_modfun = ModFun,
                               events_processed = EventProcessed,
                               stats_sent_count = StatsSent,
                               stats_dropped_count = StatsDropped,
                               send_errors = SendErrors
+
                             }) ->
   {Num, Lines} = process_event (Prefix, Binary, ModFun),
-  case send (Transport, Socket, Host, Port, Lines) of
-    ok ->
-      { noreply, State#state {
-                   events_processed = EventProcessed + 1,
-                   stats_sent_count = StatsSent + Num
-                 }
+  case TransportMod:connected (Transport) of
+    false ->
+      % Not connected, let the reconnect logic reconnect, just drop for now
+      { noreply,
+        State#state { events_processed = EventProcessed + 1,
+                      stats_dropped_count = StatsDropped + Num
+                    }
       };
-    _ ->
-      { noreply, try_connect (
-                   State#state {
-                     events_processed = EventProcessed + 1,
-                     stats_dropped_count = StatsDropped + Num,
-                     send_errors = SendErrors + 1
-                   }
-                 )
-      }
+    true ->
+      case TransportMod:send (Transport, Lines) of
+        {ok, NewTransport} ->
+          { noreply, State#state {
+                       transport = NewTransport,
+                       events_processed = EventProcessed + 1,
+                       stats_sent_count = StatsSent + Num
+                     }
+          };
+        {_, NewTransport} ->
+          { noreply, try_connect (
+                       State#state {
+                         transport = NewTransport,
+                         events_processed = EventProcessed + 1,
+                         stats_dropped_count = StatsDropped + Num,
+                         send_errors = SendErrors + 1
+                       }
+                     )
+          }
+      end
   end;
 handle_cast (Request, State) ->
   error_logger:warning_msg ("~p : Unrecognized cast ~p~n",[?MODULE, Request]),
@@ -160,25 +151,26 @@ handle_cast (Request, State) ->
 
 handle_info (try_connect, State) ->
   { noreply, try_connect (State) };
-handle_info ({tcp_closed, _}, State = #state {
-                                        socket = Socket,
-                                        transport = Transport,
-                                        connection_errors = ConnectErrors
-                                      }) ->
-  close (Transport, Socket),
-  { noreply, try_connect (
-               State#state {
-                 socket = undefined,
-                 connection_errors = ConnectErrors + 1
-               }
-             )
-  };
+%handle_info ({tcp_closed, _}, State = #state {
+%                                        socket = Socket,
+%                                        transport = Transport,
+%                                        connection_errors = ConnectErrors
+%                                      }) ->
+%  close (Transport, Socket),
+%  { noreply, try_connect (
+%               State#state {
+%                 socket = undefined,
+%                 connection_errors = ConnectErrors + 1
+%               }
+%             )
+%  };
 handle_info (Request, State) ->
   error_logger:warning_msg ("~p : Unrecognized info ~p~n",[?MODULE, Request]),
   { noreply, State }.
 
-terminate (_Reason, #state { socket = Socket, transport = Transport }) ->
-  close (Transport, Socket),
+terminate (_Reason, #state { transport = Transport,
+                             transport_mod = TransportMod }) ->
+  TransportMod:close (Transport),
   ok.
 
 code_change (_OldVsn, State, _Extra) ->
@@ -187,25 +179,6 @@ code_change (_OldVsn, State, _Extra) ->
 %%====================================================================
 %% internal functions
 %%====================================================================
-connect (tcp, Host, Port, ConnectTimeout, SendTimeout) ->
-  gen_tcp:connect (Host, Port,
-                   [{mode, list}, {send_timeout, SendTimeout}],
-                   ConnectTimeout);
-connect (udp, _Host, _Port, _ConnectTimeout, _SendTimeout) ->
-  gen_udp:open (0, [{sndbuf, 2 * 1024 *1024 }]).
-
-send (udp, Socket, Host, Port, Line) ->
-  gen_udp:send (Socket, Host, Port, Line);
-send (tcp, Socket, _Host, _Port, Line) ->
-  gen_tcp:send (Socket, Line).
-
-close (_, undefined) ->
-  ok;
-close (udp, Socket) ->
-  gen_udp:close (Socket);
-close (tcp, Socket) ->
-  gen_tcp:close (Socket).
-
 reconnect_time ( #state { reconnect_min = Min, reconnect_time = 0 } ) ->
   Min;  % initially always return the minimum reconnect
 reconnect_time ( #state { reconnect_max = Max, reconnect_time = Max } ) ->
@@ -217,31 +190,26 @@ reconnect_time ( #state { reconnect_max = Max, reconnect_time = T } ) ->
     false -> Backoff
   end.
 
-try_connect (State = #state { socket = OldSocket,
-                              host = Host,
-                              port = Port,
-                              connect_timeout = ConnectTimeout,
-                              send_timeout = SendTimeout,
-                              transport = Transport,
+try_connect (State = #state { transport = Transport,
+                              transport_mod = TransportMod,
                               connection_errors = ConnectErrors
                             } ) ->
   % close the old connection
-  close (Transport, OldSocket),
+  TransportMod:close (Transport),
 
   % then attempt a new connection
-  case connect (Transport, Host, Port, ConnectTimeout, SendTimeout) of
-    {ok, Socket} ->
-      State#state { socket = Socket, reconnect_time = 0 };
+  case TransportMod:connect (Transport) of
+    {ok, NewTransport} ->
+      State#state { transport = NewTransport, reconnect_time = 0 };
     Error ->
       ReconnectTime = reconnect_time (State),
       error_logger:error_msg (
-        "~p : connection to ~s:~p failed with ~p, "
+        "~p : connection with ~p failed with ~p, "
         "trying again in ~p milliseconds",
-        [self(), Host, Port, Error, ReconnectTime]),
+        [self(), TransportMod, Error, ReconnectTime]),
       erlang:send_after (ReconnectTime, self(), try_connect),
 
-      State#state { socket = undefined,
-                    reconnect_time = ReconnectTime,
+      State#state { reconnect_time = ReconnectTime,
                     connection_errors = ConnectErrors + 1  }
   end.
 
