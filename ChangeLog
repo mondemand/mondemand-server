@@ -1,3 +1,7 @@
+* Fri May 02 2014 Anthony Molinaro <anthonym@alumni.caltech.edu> 1.3.0
+- add support for connection/worker pools for processing stats
+- add support afunix/tcp for connections
+
 * Wed Mar 05 2014 Vikram Kadi <vikram.kadi@gmail.com> 1.2.0
 - support to receive trace events over http on the endpoint /tcp
 - updated the lwes version that supports long strings

@@ -1,7 +1,7 @@
 { application, mondemand_server,
   [
     { description,"A Server for dealing with mondemand events"},
-    { vsn,"1.2.0"},
+    { vsn,"1.3.0"},
     { modules,[]},
     { registered,[mondemand_backend_all_journaller,
                   mondemand_backend_log_file,
