@@ -9,7 +9,8 @@
                   mondemand_backend_trace_file,mondemand_server,
                   mondemand_server_sup]},
     { applications, [kernel,stdlib,lwes,crypto,inets,public_key,ssl,
-                     xmerl,compiler,syntax_tools,mochiweb,webmachine]},
+                     xmerl,compiler,syntax_tools,mochiweb,webmachine,
+                     sidejob,afunix]},
     { env, [] },
     { mod, {mondemand_server_app,[]}}
   ]
