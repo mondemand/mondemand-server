@@ -5,7 +5,7 @@
           connect/1,         % (Config)
           send/2,            % (State, Data)
           close/1,           % (State)
-          handle_response/2  % (State, Response)
+          handle_info/2      % (State, Response)
          ]).
 
 -record (md_tcp_state, { host, port, connect_timeout, send_timeout, socket }).
@@ -48,9 +48,12 @@ connect (State = #md_tcp_state {
 send (State = #md_tcp_state { socket = Socket}, Data) ->
   { gen_tcp:send (Socket, Data), State }.
 
+close (#md_tcp_state { socket = undefined}) ->
+  ok;
 close (#md_tcp_state { socket = Socket}) ->
   gen_tcp:close (Socket).
 
-handle_response (State, Response) ->
-  io:format ("got ~p~n",[Response]),
-  { ok, State }.
+handle_info (State, {tcp_closed, _}) ->
+  { error, State };
+handle_info (State, {tcp, _, Response}) ->
+  { ok, State, Response }.

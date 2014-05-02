@@ -34,15 +34,19 @@ process_event (Event, State = #listener_state { dispatch = Dispatch }) ->
 
 process (Event, Dispatch) ->
   % call handlers for each event type
-  EventName = lwes_event:peek_name_from_udp (Event),
-  case dict:find (EventName, Dispatch) of
-    {ok, V} -> [ M:process(Event) || M <- V ];
-    error ->
-      case dict:find ("*", Dispatch) of
-        {ok, DV} -> [ M:process(Event) || M <- DV ];
+  case lwes_event:peek_name_from_udp (Event) of
+    { error, _ } -> 
+      error_logger:error_msg ("Bad event ~p",[Event]);
+    EventName ->
+      case dict:find (EventName, Dispatch) of
+        {ok, V} -> [ M:process(Event) || M <- V ];
         error ->
-          error_logger:error_msg ("No handler for event ~p in dispatch~n~p",
-                                  [EventName, Dispatch])
+          case dict:find ("*", Dispatch) of
+            {ok, DV} -> [ M:process(Event) || M <- DV ];
+            error ->
+              error_logger:error_msg ("No handler for event ~p in dispatch~n~p",
+                                      [EventName, Dispatch])
+          end
       end
   end.
 

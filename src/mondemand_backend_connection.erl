@@ -17,7 +17,7 @@
                   transport_mod,
                   prefix,
                   name,
-                  stat_modfun,
+                  handler_mod,
                   reconnect_min,
                   reconnect_max,
                   reconnect_time = 0,
@@ -46,41 +46,23 @@ init ([Name]) ->
   Prefix = proplists:get_value (prefix, Config),
   ReconnectMin = proplists:get_value (reconnect_min, Config, 10),
   ReconnectMax = proplists:get_value (reconnect_max, Config, 30000),
-  ModFun = proplists:get_value (stat_modfun, Config, undefined),
+  HandlerMod = proplists:get_value (handler_mod, Config, undefined),
 
-  { ValidModFun, {Mod, Fun} } =
-    case is_tuple (ModFun) andalso tuple_size (ModFun) =:= 2 of
-      true ->
-        {M, F} = ModFun,
-        code:ensure_loaded (M),
-        case erlang:function_exported (M, F, 8) of
-          true -> { true, {M, F} };
-          false -> { false, {undefined, undefined} }
-        end;
-      false ->
-        {false, {undefined, undefined} }
-    end,
-
-  case ValidModFun of
-    true ->
-      case TransportMod:init (Config) of
-        {ok, Transport} ->
-          State = #state {
-                    transport = Transport,
-                    transport_mod = TransportMod,
-                    prefix = Prefix,
-                    name = Name,
-                    stat_modfun = fun Mod:Fun/8,
-                    reconnect_min = ReconnectMin,
-                    reconnect_max = ReconnectMax
-                  },
-          { ok, try_connect (State) };
-        E ->
-          {stop, E}
-      end;
-    false ->
-      { stop, bad_stat_modfun }
-   end.
+  case TransportMod:init (Config) of
+    {ok, Transport} ->
+      State = #state {
+                transport = Transport,
+                transport_mod = TransportMod,
+                prefix = Prefix,
+                name = Name,
+                handler_mod = HandlerMod,
+                reconnect_min = ReconnectMin,
+                reconnect_max = ReconnectMax
+              },
+      { ok, try_connect (State) };
+    E ->
+      {stop, E}
+  end.
 
 handle_call ({stats}, _From,
              State = #state { events_processed = EventsProcessed,
@@ -108,20 +90,19 @@ handle_cast ({process, Binary},
              State = #state { transport = Transport,
                               transport_mod = TransportMod,
                               prefix = Prefix,
-                              stat_modfun = ModFun,
+                              handler_mod = HandlerMod,
                               events_processed = EventProcessed,
                               stats_sent_count = StatsSent,
                               stats_dropped_count = StatsDropped,
                               send_errors = SendErrors
-
                             }) ->
-  {Num, Lines} = process_event (Prefix, Binary, ModFun),
+  {NumBad, NumGood, Lines} = process_event (Prefix, Binary, HandlerMod),
   case TransportMod:connected (Transport) of
     false ->
       % Not connected, let the reconnect logic reconnect, just drop for now
       { noreply,
         State#state { events_processed = EventProcessed + 1,
-                      stats_dropped_count = StatsDropped + Num
+                      stats_dropped_count = StatsDropped + NumBad + NumGood
                     }
       };
     true ->
@@ -130,7 +111,8 @@ handle_cast ({process, Binary},
           { noreply, State#state {
                        transport = NewTransport,
                        events_processed = EventProcessed + 1,
-                       stats_sent_count = StatsSent + Num
+                       stats_dropped_count = StatsDropped + NumBad,
+                       stats_sent_count = StatsSent + NumGood
                      }
           };
         {_, NewTransport} ->
@@ -138,7 +120,8 @@ handle_cast ({process, Binary},
                        State#state {
                          transport = NewTransport,
                          events_processed = EventProcessed + 1,
-                         stats_dropped_count = StatsDropped + Num,
+                         stats_dropped_count =
+                           StatsDropped + NumBad + NumGood,
                          send_errors = SendErrors + 1
                        }
                      )
@@ -151,19 +134,33 @@ handle_cast (Request, State) ->
 
 handle_info (try_connect, State) ->
   { noreply, try_connect (State) };
-%handle_info ({tcp_closed, _}, State = #state {
-%                                        socket = Socket,
-%                                        transport = Transport,
-%                                        connection_errors = ConnectErrors
-%                                      }) ->
-%  close (Transport, Socket),
-%  { noreply, try_connect (
-%               State#state {
-%                 socket = undefined,
-%                 connection_errors = ConnectErrors + 1
-%               }
-%             )
-%  };
+handle_info (Other, State = #state { transport = Transport,
+                                     transport_mod = TransportMod,
+                                     handler_mod = HandlerMod,
+                                     connection_errors = ConnectErrors,
+                                     stats_sent_count = StatsSent,
+                                     stats_dropped_count = StatsDropped
+                                   }) ->
+  % first we let the transport a chance to handle the response, mostly
+  % to unpack and handle errors, then it's handed to the handler to
+  % do something
+  case TransportMod:handle_info (Transport, Other) of
+    { ok, NewTransport, TransportResponse } ->
+      Errors = HandlerMod:handle_response (TransportResponse),
+      { noreply, State#state { transport = NewTransport,
+                               stats_sent_count = StatsSent - Errors,
+                               stats_dropped_count = StatsDropped + Errors
+                             }
+      };
+    { error, NewTransport } ->
+      { noreply, try_connect (
+                   State#state {
+                     transport = NewTransport,
+                     connection_errors = ConnectErrors + 1
+                   }
+                 )
+      }
+  end;
 handle_info (Request, State) ->
   error_logger:warning_msg ("~p : Unrecognized info ~p~n",[?MODULE, Request]),
   { noreply, State }.
@@ -213,7 +210,7 @@ try_connect (State = #state { transport = Transport,
                     connection_errors = ConnectErrors + 1  }
   end.
 
-process_event (Prefix, Binary, LineFormatter) ->
+process_event (Prefix, Binary, HandlerMod) ->
   % deserialize the event as a dictionary
   Event =  lwes_event:from_udp_packet (Binary, dict),
 
@@ -236,15 +233,21 @@ process_event (Prefix, Binary, LineFormatter) ->
     end,
 
   Num = dict:fetch (<<"num">>, Data),
-  { Num,
-    lists:map (
-      fun (E) ->
+  { NumBad, NumGood, Entries } =
+    lists:foldl (
+      fun (E, { Errors, Okay, List } ) ->
         MetricType = dict:fetch (mondemand_server_util:stat_type (E), Data),
         MetricName = dict:fetch (mondemand_server_util:stat_key (E), Data),
         MetricValue = dict:fetch (mondemand_server_util:stat_val (E), Data),
-        LineFormatter (Prefix, ProgId, SenderHost, MetricType, MetricName,
-                       MetricValue, Timestamp, Context)
+        case HandlerMod:format_stat (Prefix, ProgId, SenderHost,
+                                     MetricType, MetricName, MetricValue,
+                                     Timestamp, Context)
+        of
+          error -> { Errors + 1, Okay, List };
+          Other -> { Errors, Okay + 1, [Other | List] }
+        end
       end,
+      { 0, 0, [] },
       lists:seq (1, Num)
-    )
-  }.
+    ),
+  { NumBad, NumGood, [ HandlerMod:header(), Entries, HandlerMod:footer() ] }.

@@ -5,7 +5,7 @@
           connect/1,         % (State) -> State
           send/2,            % (State, Data) -> State
           close/1,           % (State) -> ok
-          handle_response/2  % (State, Response) -> State
+          handle_info/2      % (State, Response) -> State
          ]).
 
 -record (md_afunix_state, { path, send_timeout, socket }).
@@ -15,8 +15,8 @@ init (Config) ->
   SendTimeout = proplists:get_value (send_timeout, Config, 5000),
   case Path =/= undefined of
     true ->
-      #md_afunix_state { path = Path,
-                         send_timeout = SendTimeout };
+      {ok, #md_afunix_state { path = Path,
+                              send_timeout = SendTimeout }};
     false ->
       {error, bad_path}
   end.
@@ -37,9 +37,14 @@ connect (State = #md_afunix_state {
 send (State = #md_afunix_state { socket = Socket}, Data) ->
   {afunix:send (Socket, Data), State}.
 
+close (#md_afunix_state { socket = undefined}) ->
+  ok;
 close (#md_afunix_state { socket = Socket}) ->
   afunix:close (Socket).
 
-handle_response (State, Response) ->
-  io:format ("got ~p~n",[Response]),
-  {ok, State}.
+% not sure what errors are afunix specific so for the moment anything that
+% doesn't match the tcp response is considered an error
+handle_info (State, {tcp, _, Response}) ->
+  { ok, State, Response };
+handle_info (State, _) ->
+  {error, State}.
