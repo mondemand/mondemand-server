@@ -23,16 +23,18 @@ sidejob_unname (Name) when is_atom (Name) ->
   end.
 
 init ([Module, Limit, Number]) ->
+  init ([Module, Limit, Number, mondemand_backend_connection]);
+init ([Module, Limit, Number, WorkerMod]) ->
   case Number of
     undefined ->
       sidejob:new_resource (sidejob_name (Module),
-                            mondemand_backend_connection,
+                            WorkerMod,
                             Limit);
     _ ->
       sidejob:new_resource (sidejob_name (Module),
-                            mondemand_backend_connection,
+                            WorkerMod,
                             Limit, Number)
-  end.
+  end .
 
 call (Module, Msg) ->
   sidejob:call (sidejob_name (Module), Msg).
