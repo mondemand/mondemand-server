@@ -1,10 +1,22 @@
 -module (mondemand_server_config).
 
--export ([ dispatch/0,
+-export ([ get_dispatch/1,
+           set_dispatch/0,
            backends_to_start/0,
            applications_to_start/0,
-           web_config/0
+           web_config/0,
+           backend_config/1
          ]).
+
+set_dispatch () ->
+  Dispatch = dispatch(),
+  mochiglobal:put (mondemand_dispatch_list, Dispatch),
+  mochiglobal:put (mondemand_dispatch_dict, dict:from_list (Dispatch)).
+
+get_dispatch (list) ->
+  mochiglobal:get (mondemand_dispatch_list);
+get_dispatch (dict) ->
+  mochiglobal:get (mondemand_dispatch_dict).
 
 dispatch () ->
   % the application needs to be loaded in order to see the variables for
@@ -42,7 +54,9 @@ dispatch () ->
   end.
 
 backends_to_start () ->
-  case dispatch () of
+  set_dispatch(),
+
+  case get_dispatch (list) of
     [] -> [];
     Dispatch ->
       % determine the unique list of modules to start from the dispatch list
@@ -76,10 +90,20 @@ calculate_web_dispatch (InitialDispatch) ->
   OutputDispatch.
 
 web_config () ->
-  {ok, C} = application:get_env (mondemand_server, web),
-  InitialDispatch = proplists:get_value (dispatch , C, []),
-  lists:keystore (dispatch, 1, C,
-                  {dispatch, calculate_web_dispatch (InitialDispatch)}).
+  case application:get_env (mondemand_server, web) of
+    {ok, C} ->
+      InitialDispatch = proplists:get_value (dispatch , C, []),
+      lists:keystore (dispatch, 1, C,
+                      {dispatch, calculate_web_dispatch (InitialDispatch)});
+    undefined ->
+      undefined
+  end.
+
+backend_config (BackendModule) ->
+  case application:get_env (mondemand_server, BackendModule) of
+    { ok, T } -> T;
+    undefined -> []
+  end.
 
 %%--------------------------------------------------------------------
 %%% Internal functions

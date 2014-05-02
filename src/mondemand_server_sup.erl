@@ -22,21 +22,18 @@ start_link() ->
 %% @spec init([]) -> SupervisorTree
 %% @doc supervisor callback.
 init([]) ->
+  mondemand_server_config:set_dispatch (),
   Dispatch =
-    case mondemand_server_config:dispatch () of
+    case mondemand_server_config:get_dispatch (list) of
       [] -> exit (no_dispatch_list);
       L -> L
     end,
 
   BackendConfigs =
     [ begin
-        BackendConfig =
-          case application:get_env (mondemand_server, BackendModule) of
-            { ok, T } -> T;
-            undefined -> []
-          end,
         { BackendModule,
-          { BackendModule, start_link, [BackendConfig] },
+          { BackendModule, start_link,
+            [mondemand_server_config:backend_config (BackendModule)] },
           permanent,
           2000,
           worker,
@@ -46,20 +43,26 @@ init([]) ->
       || BackendModule
       <- mondemand_server_config:backends_to_start ()
     ],
+  WebConfig =
+    case mondemand_server_config:web_config () of
+      undefined -> [];
+      WC ->
+        [
+          { webmachine_mochiweb,
+            { webmachine_mochiweb, start, [WC]},
+            permanent,
+            5000,
+            worker,
+            dynamic
+          }
+        ]
+    end,
 
   ToStart =
     {
       { one_for_one, 10, 10 },
-      BackendConfigs ++
+      BackendConfigs ++ WebConfig ++
       [
-        { webmachine_mochiweb,
-          { webmachine_mochiweb, start,
-            [mondemand_server_config:web_config ()]},
-          permanent,
-          5000,
-          worker,
-          dynamic
-        },
         {
           mondemand_server,
           { mondemand_server, start_link, [Dispatch] },

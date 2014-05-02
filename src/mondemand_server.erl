@@ -6,7 +6,8 @@
 
 %% API
 -export ([ start_link/1,
-           process_event/2 ]).
+           process_event/2,
+           process/2 ]).
 
 %% gen_server callbacks
 -export ([ init/1,
@@ -28,19 +29,26 @@ start_link (Config) ->
   gen_server:start_link ( { local, ?MODULE }, ?MODULE, [Config], []).
 
 process_event (Event, State = #listener_state { dispatch = Dispatch }) ->
-  % call handlers for each event type
-  EventName = lwes_event:peek_name_from_udp (Event),
-  case dict:find (EventName, Dispatch) of
-    {ok, V} -> [ M:process(Event) || M <- V ];
-    error ->
-      case dict:find ("*", Dispatch) of
-        {ok, DV} -> [ M:process(Event) || M <- DV ];
-        error ->
-          error_logger:error_msg ("No handler for event ~p in dispatch~n~p",
-                                  [EventName, Dispatch])
-      end
-  end,
+  process (Event, Dispatch), 
   State.
+
+process (Event, Dispatch) ->
+  % call handlers for each event type
+  case lwes_event:peek_name_from_udp (Event) of
+    { error, _ } -> 
+      error_logger:error_msg ("Bad event ~p",[Event]);
+    EventName ->
+      case dict:find (EventName, Dispatch) of
+        {ok, V} -> [ M:process(Event) || M <- V ];
+        error ->
+          case dict:find ("*", Dispatch) of
+            {ok, DV} -> [ M:process(Event) || M <- DV ];
+            error ->
+              error_logger:error_msg ("No handler for event ~p in dispatch~n~p",
+                                      [EventName, Dispatch])
+          end
+      end
+  end.
 
 %%====================================================================
 %% gen_server callbacks

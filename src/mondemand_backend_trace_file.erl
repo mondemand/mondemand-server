@@ -116,9 +116,7 @@ handle_cast ({process, Binary},
       _ ->
         mondemand_server_util:increment_stat (errors, Stats)
     end,
-
   { noreply, State#state { stats = NewStats } };
-
 handle_cast (Request, State) ->
   error_logger:warning_msg ("~p : Unrecognized cast ~p~n",[?MODULE, Request]),
   { noreply, State }.

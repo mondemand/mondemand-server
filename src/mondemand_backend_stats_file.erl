@@ -115,7 +115,9 @@ handle_cast ({process, Binary},
     ),
 
   NewStats =
-    mondemand_server_util:increment_stat (processed, TotalProcessed, Stats),
+    mondemand_server_util:increment_stat (events_processed, 1,
+      mondemand_server_util:increment_stat (stats_sent_count, TotalProcessed,
+                                            Stats)),
 
   { noreply, State#state { stats = NewStats } };
 
