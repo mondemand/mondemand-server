@@ -23,11 +23,8 @@ start_link() ->
 %% @doc supervisor callback.
 init([]) ->
   mondemand_server_config:set_dispatch (),
-  Dispatch =
-    case mondemand_server_config:get_dispatch (list) of
-      [] -> exit (no_dispatch_list);
-      L -> L
-    end,
+  Dispatch = mondemand_server_config:get_dispatch (dict),
+  NumDispatchers = mondemand_server_config:num_dispatchers (),
 
   BackendConfigs =
     [ begin
@@ -63,6 +60,15 @@ init([]) ->
       { one_for_one, 10, 10 },
       BackendConfigs ++ WebConfig ++
       [
+        {
+          mondemand_server_dispatcher_sup,
+          { mondemand_server_dispatcher_sup, start_link,
+            [Dispatch, NumDispatchers] },
+          permanent,
+          2000,
+          supervisor,
+          [ mondemand_server_dispatcher_sup ]
+        },
         {
           mondemand_server,
           { mondemand_server, start_link, [Dispatch] },

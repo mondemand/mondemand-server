@@ -2,21 +2,36 @@
 
 -export ([ get_dispatch/1,
            set_dispatch/0,
+           num_dispatchers/0,
            backends_to_start/0,
            applications_to_start/0,
            web_config/0,
-           backend_config/1
+           backend_config/1,
+           parse_dispatch/1
          ]).
 
+% FIXME: I don't think we need any of this anymore, just need to fix the
+% list of backends code to not require a list then we can just use the dict
+% everywhere, and get rid of mochiglobal use.
 set_dispatch () ->
-  Dispatch = dispatch(),
-  mochiglobal:put (mondemand_dispatch_list, Dispatch),
-  mochiglobal:put (mondemand_dispatch_dict, dict:from_list (Dispatch)).
+  case dispatch() of
+    undefined -> exit (no_dispatch_list);
+    [] -> exit (empty_dispatch_list);
+    Dispatch ->
+      mochiglobal:put (mondemand_dispatch_list, Dispatch),
+      mochiglobal:put (mondemand_dispatch_dict, dict:from_list (Dispatch))
+  end.
 
 get_dispatch (list) ->
   mochiglobal:get (mondemand_dispatch_list);
 get_dispatch (dict) ->
   mochiglobal:get (mondemand_dispatch_dict).
+
+num_dispatchers () ->
+  case application:get_env (mondemand_server, num_dispatchers) of
+    {ok, C} when is_integer (C) -> C;
+    undefined -> erlang:system_info(schedulers)
+  end.
 
 dispatch () ->
   % the application needs to be loaded in order to see the variables for
@@ -24,33 +39,8 @@ dispatch () ->
   application:load (mondemand_server),
 
   case application:get_env (mondemand_server, dispatch) of
-    { ok, Dispatch } ->
-      % split the dispatch list into the wildcard rule and others
-      { WildcardList, EventNameList } =
-        case
-          lists:partition (fun({"*",_})-> true; (_) -> false end, Dispatch)
-        of
-          { [], N } -> { [], N };
-          { [{"*",A}], N } -> { A, N }
-        end,
-
-      % add the wildcard rule to each of the others
-      DispatchWithEventNames =
-        lists:map (fun ({K,VL}) ->
-                     {list_to_binary (K), lists:append (VL, WildcardList)}
-                   end,
-                   EventNameList),
-
-      % add a wildcard rule to the master list if one is available
-      FinalDispatch =
-        case WildcardList of
-          [] -> DispatchWithEventNames;
-          _ -> lists:append (DispatchWithEventNames ,[{"*",WildcardList}])
-        end,
-
-      FinalDispatch;
-    undefined ->
-      []
+    { ok, Dispatch } -> parse_dispatch (Dispatch);
+    undefined -> undefined
   end.
 
 backends_to_start () ->
@@ -135,6 +125,32 @@ dispatch_specificity ({ PathSpecA, _, _ }, { PathSpecB, _, _ }) ->
           FullPathSpecA =< FullPathSpecB
       end
   end.
+
+parse_dispatch (Dispatch) ->
+  % split the dispatch list into the wildcard rule and others
+  { WildcardList, EventNameList } =
+    case
+      lists:partition (fun({"*",_})-> true; (_) -> false end, Dispatch)
+    of
+      { [], N } -> { [], N };
+      { [{"*",A}], N } -> { A, N }
+    end,
+
+  % add the wildcard rule to each of the others
+  DispatchWithEventNames =
+    lists:map (fun ({K,VL}) ->
+                 {list_to_binary (K), lists:append (VL, WildcardList)}
+               end,
+               EventNameList),
+
+  % add a wildcard rule to the master list if one is available
+  FinalDispatch =
+    case WildcardList of
+      [] -> DispatchWithEventNames;
+      _ -> lists:append (DispatchWithEventNames ,[{"*",WildcardList}])
+    end,
+
+  FinalDispatch.
 
 %%--------------------------------------------------------------------
 %%% Test functions

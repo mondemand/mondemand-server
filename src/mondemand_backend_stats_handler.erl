@@ -7,7 +7,7 @@ behaviour_info(callbacks) ->
     {separator, 0},
     {format_stat, 8},
     {footer, 0},
-    {handle_response, 1}
+    {handle_response, 2}
   ];
 behaviour_info(_) ->
   undefined.

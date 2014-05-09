@@ -16,6 +16,7 @@
                   prefix,
                   name,
                   handler_mod,
+                  response_state,
                   reconnect_min,
                   reconnect_max,
                   reconnect_time = 0,
@@ -137,6 +138,7 @@ handle_info (try_connect, State) ->
 handle_info (Other, State = #state { transport = Transport,
                                      transport_mod = TransportMod,
                                      handler_mod = HandlerMod,
+                                     response_state = PreviousResponseState,
                                      connection_errors = ConnectErrors,
                                      stats_sent_count = StatsSent,
                                      stats_dropped_count = StatsDropped
@@ -146,8 +148,10 @@ handle_info (Other, State = #state { transport = Transport,
   % do something
   case TransportMod:handle_info (Transport, Other) of
     { ok, NewTransport, TransportResponse } ->
-      Errors = HandlerMod:handle_response (TransportResponse),
+      { Errors, NewResponseState } =
+        HandlerMod:handle_response (TransportResponse, PreviousResponseState),
       { noreply, State#state { transport = NewTransport,
+                               response_state = NewResponseState,
                                stats_sent_count = StatsSent - Errors,
                                stats_dropped_count = StatsDropped + Errors
                              }
@@ -156,7 +160,8 @@ handle_info (Other, State = #state { transport = Transport,
       { noreply, try_connect (
                    State#state {
                      transport = NewTransport,
-                     connection_errors = ConnectErrors + 1
+                     connection_errors = ConnectErrors + 1,
+                     response_state = undefined
                    }
                  )
       }

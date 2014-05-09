@@ -6,8 +6,7 @@
 
 %% API
 -export ([ start_link/1,
-           process_event/2,
-           process/2 ]).
+           process_event/2 ]).
 
 %% gen_server callbacks
 -export ([ init/1,
@@ -19,36 +18,17 @@
          ]).
 
 -record (state, { listener, dispatch }).
--record (listener_state, { dispatch }).
+-record (listener_state, { }).
 
 %%====================================================================
 %% API
 %%====================================================================
 start_link (Config) ->
-  error_logger:info_msg ("mondemand_server:start_link(~p)",[Config]),
   gen_server:start_link ( { local, ?MODULE }, ?MODULE, [Config], []).
 
-process_event (Event, State = #listener_state { dispatch = Dispatch }) ->
-  process (Event, Dispatch), 
+process_event (Event, State) ->
+  mondemand_server_dispatcher_sup:dispatch (Event),
   State.
-
-process (Event, Dispatch) ->
-  % call handlers for each event type
-  case lwes_event:peek_name_from_udp (Event) of
-    { error, _ } -> 
-      error_logger:error_msg ("Bad event ~p",[Event]);
-    EventName ->
-      case dict:find (EventName, Dispatch) of
-        {ok, V} -> [ M:process(Event) || M <- V ];
-        error ->
-          case dict:find ("*", Dispatch) of
-            {ok, DV} -> [ M:process(Event) || M <- DV ];
-            error ->
-              error_logger:error_msg ("No handler for event ~p in dispatch~n~p",
-                                      [EventName, Dispatch])
-          end
-      end
-  end.
 
 %%====================================================================
 %% gen_server callbacks
@@ -62,8 +42,7 @@ init ([Dispatch]) ->
 
   % open lwes channel
   {ok, Channel} = lwes:open (listener, LwesConfig),
-  ok = lwes:listen (Channel, fun process_event/2, raw,
-                    #listener_state{ dispatch = dict:from_list (Dispatch)}),
+  ok = lwes:listen (Channel, fun process_event/2, raw, #listener_state{ }),
 
   { ok, #state { dispatch = Dispatch, listener = Channel } }.
 

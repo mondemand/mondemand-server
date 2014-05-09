@@ -14,12 +14,13 @@ allowed_methods (ReqData, State) ->
   {['POST'], ReqData, State}.
 
 process_post (ReqData, State) ->
-  mondemand_server:process
-    ( { udp, none, 
-        request_ip (ReqData), 
-        server_port (),  
-        wrq:req_body (ReqData) },
-      mondemand_server_config:get_dispatch (dict)),
+  mondemand_server_dispatcher_sup:dispatch
+    ( { udp, none,
+        request_ip (ReqData),
+        server_port (),
+        wrq:req_body (ReqData)
+      }
+    ),
   {true, ReqData, State}.
 
 finish_request (ReqData, State) ->
@@ -37,7 +38,7 @@ request_ip (ReqData) ->
   Ip.
 
 server_port () ->
-  proplists:get_value (port, 
+  proplists:get_value (port,
     mondemand_server_config:web_config()).
 
 -ifdef(HAVE_EUNIT).
