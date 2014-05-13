@@ -44,7 +44,12 @@ process_event (Prefix, Binary, HandlerMod) ->
               true -> { Errors + 1, Okay, Current + 1, List };
               false ->
                 % otherwise we need to remove the trailing separator
-                [ Separator | Rest ] = List,
+                Rest =
+                  case List of
+                    [] -> [];  % an error at the beginning can result in an
+                               % empty list
+                    [ Separator | R ] -> R
+                  end,
                 { Errors + 1, Okay, Current + 1, Rest }
             end;
           Other ->
