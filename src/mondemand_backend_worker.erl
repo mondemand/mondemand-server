@@ -2,6 +2,9 @@
 
 -behaviour (gen_server).
 
+%% API
+-export ([start_link/4]).
+
 %% gen_server callbacks
 -export ([ init/1,
            handle_call/3,
@@ -25,48 +28,41 @@ behaviour_info(_) ->
                   name,
                   handler_mod,
                   worker,
-                  worker_mod,
-                  events_processed = 0,
-                  stats_sent_count = 0,
-                  stats_dropped_count = 0,
-                  stats_sent_micros = 0,
-                  connection_errors = 0,
-                  send_errors = 0
+                  worker_mod
                 }).
+
+start_link (SupervisorName, WorkerAtom, WorkerName, WorkerModule) ->
+  gen_server:start_link ({local, WorkerAtom},?MODULE,
+                         [SupervisorName, WorkerName, WorkerModule],[]).
+
 
 %%====================================================================
 %% gen_server callbacks
 %%====================================================================
-init ([Name]) ->
+init ([SupervisorName, WorkerName, WorkerModule]) ->
   % ensure terminate is called
   process_flag( trap_exit, true ),
 
-  ConfigKey = mondemand_backend_connection_pool:sidejob_unname (Name),
+  % init stats
+  mondemand_server_stats:init_backend (WorkerModule, events_processed),
+  mondemand_server_stats:init_backend (WorkerModule, stats_sent_count),
+  mondemand_server_stats:init_backend (WorkerModule, stats_dropped_count),
+  mondemand_server_stats:init_backend (WorkerModule, stats_sent_micros),
+  mondemand_server_stats:init_backend (WorkerModule, connection_errors),
+  mondemand_server_stats:init_backend (WorkerModule, send_errors),
 
   % config is grabbed from the server
-  Config = mondemand_server_config:backend_config (ConfigKey),
+  Config = mondemand_server_config:backend_config (WorkerModule),
 
   HandlerMod = proplists:get_value (handler_mod, Config, undefined),
   WorkerMod = proplists:get_value (worker_mod, Config, undefined),
 
-  {ok, #state { name = Name,
+  gproc_pool:connect_worker (SupervisorName, WorkerName),
+  {ok, #state { name = WorkerName,
                 handler_mod = HandlerMod,
                 worker = WorkerMod:create (Config),
                 worker_mod = WorkerMod }}.
 
-handle_call ({stats}, _From,
-             State = #state { events_processed = EventsProcessed,
-                              stats_sent_count = StatsSent,
-                              stats_dropped_count = StatsDropped,
-                              stats_sent_micros = StatsSentMicros,
-                              connection_errors = ConnectionErrors,
-                              send_errors = SendErrors }) ->
-  { reply, dict:from_list ([ {events_processed, EventsProcessed},
-                             {stats_sent_count, StatsSent},
-                             {stats_dropped_count, StatsDropped},
-                             {stats_sent_micros, StatsSentMicros},
-                             {connection_errors, ConnectionErrors},
-                             {send_errors, SendErrors } ]), State };
 handle_call (Request, From, State) ->
   error_logger:warning_msg ("~p : Unrecognized call ~p from ~p~n",
                             [?MODULE, Request, From]),
@@ -75,30 +71,29 @@ handle_call (Request, From, State) ->
 handle_cast ({process, Binary},
              State = #state { handler_mod = HandlerMod,
                               worker = Worker,
-                              worker_mod = WorkerMod,
-                              events_processed = EventProcessed,
-                              stats_sent_count = StatsSent,
-                              stats_dropped_count = StatsDropped,
-                              send_errors = SendErrors
+                              worker_mod = WorkerModule
                             }) ->
   {NumBad, NumGood, Lines} =
     mondemand_backend_stats_formatter:process_event (undefined,
                                                      Binary, HandlerMod),
-  case WorkerMod:send (Worker, Lines) of
+
+  mondemand_server_stats:increment_backend (WorkerModule, events_processed),
+
+  case WorkerModule:send (Worker, Lines) of
     ok ->
-      { noreply, State#state {
-          events_processed = EventProcessed + 1,
-          stats_dropped_count = StatsDropped + NumBad,
-          stats_sent_count = StatsSent + NumGood
-        }
-      };
+      mondemand_server_stats:increment_backend
+        (WorkerModule, stats_dropped_count, NumBad),
+      mondemand_server_stats:increment_backend
+        (WorkerModule, stats_sent_count, NumGood),
+
+      { noreply, State };
     error ->
-      { noreply, State#state {
-          events_processed = EventProcessed + 1,
-          stats_dropped_count = StatsDropped + NumBad + NumGood,
-          send_errors = SendErrors + 1
-        }
-      }
+      mondemand_server_stats:increment_backend
+        (WorkerModule, stats_dropped_count, NumBad + NumGood),
+      mondemand_server_stats:increment_backend
+        (WorkerModule, send_errors),
+
+      { noreply, State }
   end;
 handle_cast (Request, State) ->
   error_logger:warning_msg ("~p : Unrecognized cast ~p~n",[?MODULE, Request]),

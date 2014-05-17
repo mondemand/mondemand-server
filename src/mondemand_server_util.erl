@@ -60,13 +60,15 @@ mkdir_p (Dir = [[_|_]|_]) when is_list (Dir) ->
 mkdir_p (Dir) ->
   % ensure_dir only seemed to create all but the final level of directories
   % so I need to make_dir right afterward to create the final directory
-  ok = filelib:ensure_dir (Dir),
-  case file:make_dir (Dir) of
-    ok -> ok;
-    {error, eexist} -> ok;
-    E -> E
+  case filelib:ensure_dir (Dir) of
+    ok ->
+      case file:make_dir (Dir) of
+        ok -> ok;
+        {error, eexist} -> ok;
+        E -> E
+      end;
+    EE -> EE
   end.
-
 
 construct_context (#lwes_event { attrs = Data }) ->
   CtxtNum =

@@ -11,12 +11,12 @@
 %%====================================================================
 %% API functions
 %%====================================================================
-start_link(Dispatch, NumDispatchers) ->
+start_link (Dispatch, NumDispatchers) ->
   supervisor:start_link({local, ?MODULE}, ?MODULE, [Dispatch, NumDispatchers]).
 
 dispatch (Event) ->
   Pid = gproc:where (gproc_pool:pick (mondemand_dispatcher)),
-  mondemand_server_dispatcher:process (Pid, Event).
+  mondemand_server_dispatcher:dispatch (Pid, Event).
 
 stats () ->
   [
@@ -32,6 +32,9 @@ stats () ->
 %%====================================================================
 init([Dispatch, Num]) ->
   ok = gproc_pool:new (mondemand_dispatcher),
+  mondemand_server_stats:init (events_received),
+  mondemand_server_stats:init (events_dispatched),
+  mondemand_server_stats:init (dispatcher_errors),
   { ok,
     {
       {one_for_one, 10, 10},

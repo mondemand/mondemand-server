@@ -33,7 +33,7 @@ init([]) ->
             [mondemand_server_config:backend_config (BackendModule)] },
           permanent,
           2000,
-          worker,
+          BackendModule:type (),
           [ BackendModule ]
         }
       end

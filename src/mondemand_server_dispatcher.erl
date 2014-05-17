@@ -12,14 +12,14 @@
          ]).
 
 %% API
--export ([start_link/3, process/2]).
+-export ([start_link/3, dispatch/2]).
 
 -record (state, { dispatch, name, events_processed = 0 }).
 
 start_link (Dispatch, WorkerAtom, Name) ->
   gen_server:start_link ({local, WorkerAtom}, ?MODULE, [Dispatch, Name], []).
 
-process (Pid, Event) ->
+dispatch (Pid, Event) ->
   gen_server:cast (Pid, {dispatch, Event}).
 
 %%====================================================================
@@ -62,20 +62,28 @@ code_change (_OldVsn, State, _Extra) ->
 %%====================================================================
 
 dispatch_one (Event, Dispatch) ->
+  mondemand_server_stats:increment (event_received),
+
   % call handlers for each event type
   case lwes_event:peek_name_from_udp (Event) of
     { error, _ } ->
+      mondemand_server_stats:increment (dispatcher_errors),
       error_logger:error_msg ("Bad event ~p",[Event]);
     EventName ->
       % first we check the specific dispatch by event name, and send to all
       % the handlers for that name
       case dict:find (EventName, Dispatch) of
-        {ok, V} -> [ M:process(Event) || M <- V ];
+        {ok, V} ->
+          [ M:process(Event) || M <- V ],
+          mondemand_server_stats:increment (events_dispatched);
         error ->
           % if we don't find the name, we send through any "*" handlers
           case dict:find ("*", Dispatch) of
-            {ok, DV} -> [ M:process(Event) || M <- DV ];
+            {ok, DV} ->
+              [ M:process(Event) || M <- DV ],
+              mondemand_server_stats:increment (events_dispatched);
             error ->
+              mondemand_server_stats:increment (dispatcher_errors),
               error_logger:error_msg ("No handler for event ~p in dispatch~n~p",
                                       [EventName, Dispatch])
           end

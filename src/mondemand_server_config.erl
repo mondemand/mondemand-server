@@ -1,6 +1,7 @@
 -module (mondemand_server_config).
 
--export ([ get_dispatch/1,
+-export ([
+           get_dispatch/1,
            set_dispatch/0,
            num_dispatchers/0,
            backends_to_start/0,
@@ -9,6 +10,7 @@
            backend_config/1,
            parse_dispatch/1
          ]).
+
 
 % FIXME: I don't think we need any of this anymore, just need to fix the
 % list of backends code to not require a list then we can just use the dict

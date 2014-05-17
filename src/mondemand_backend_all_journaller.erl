@@ -8,8 +8,8 @@
 %% mondemand_backend callbacks
 -export ([ start_link/1,
            process/1,
-           stats/0,
-           required_apps/0
+           required_apps/0,
+           type/0
          ]).
 
 %% gen_server callbacks
@@ -21,10 +21,7 @@
            code_change/3
          ]).
 
--record (state, { config,
-                  journal,
-                  stats = dict:new ()
-                }).
+-record (state, { config, journal }).
 
 %%====================================================================
 %% mondemand_backend callbacks
@@ -36,11 +33,11 @@ start_link (Config) ->
 process (Event) ->
   gen_server:cast (?MODULE, {process, Event}).
 
-stats () ->
-  gen_server:call (?MODULE, {stats}).
-
 required_apps () ->
   [ ].
+
+type () ->
+  worker.
 
 %%====================================================================
 %% gen_server callbacks
@@ -56,23 +53,19 @@ init (Config) ->
   {ok, Journal} = lwes_journaller:start_link (NewConfig),
 
   % initialize all stats to zero
-  InitialStats =
-    mondemand_server_util:initialize_stats ([ errors, processed ] ),
+  mondemand_server_stats:init_backend (?MODULE, events_processed),
 
-  {ok, #state { config = NewConfig, journal = Journal, stats = InitialStats }}.
+  {ok, #state { config = NewConfig, journal = Journal }}.
 
-handle_call ({stats}, _From,
-             State = #state { stats = Stats }) ->
-  { reply, Stats, State };
 handle_call (Request, From, State) ->
   error_logger:warning_msg ("~p : Unrecognized call ~p from ~p~n",
                             [?MODULE, Request, From]),
   { reply, ok, State }.
 
-handle_cast ({process, Event}, #state { journal = Journal, stats = Stats}) ->
+handle_cast ({process, Event}, #state { journal = Journal }) ->
   JournalOut = lwes_journaller:process_event (Event, Journal),
-  NewStats = mondemand_server_util:increment_stat (processed, Stats),
-  {noreply, #state { journal = JournalOut, stats = NewStats }};
+  mondemand_server_stats:increment_backend (?MODULE, events_processed),
+  {noreply, #state { journal = JournalOut }};
 
 handle_cast (Request, State) ->
   error_logger:warning_msg ("~p : Unrecognized cast ~p~n",[?MODULE, Request]),

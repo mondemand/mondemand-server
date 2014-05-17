@@ -2,6 +2,9 @@
 
 -behaviour (gen_server).
 
+%% API
+-export ([start_link/4]).
+
 %% gen_server callbacks
 -export ([ init/1,
            handle_call/3,
@@ -14,34 +17,38 @@
 -record (state, { transport,
                   transport_mod,
                   prefix,
-                  name,
+                  worker_name,
+                  worker_mod,
                   handler_mod,
                   response_state,
                   reconnect_min,
                   reconnect_max,
-                  reconnect_time = 0,
-                  events_processed = 0,
-                  stats_sent_count = 0,
-                  stats_dropped_count = 0,
-                  stats_sent_micros = 0,
-                  connection_errors = 0,
-                  send_errors = 0
+                  reconnect_time = 0
                 }).
+
+start_link (SupervisorName, WorkerAtom, WorkerName, WorkerModule) ->
+  gen_server:start_link ({local, WorkerAtom},?MODULE,
+                         [SupervisorName, WorkerName, WorkerModule],[]).
 
 %%====================================================================
 %% gen_server callbacks
 %%====================================================================
-init ([Name]) ->
+init ([SupervisorName, WorkerName, WorkerModule]) ->
   % ensure terminate is called
   process_flag( trap_exit, true ),
 
-  ConfigKey = mondemand_backend_connection_pool:sidejob_unname (Name),
+  % init stats
+  mondemand_server_stats:init_backend (WorkerModule, events_processed),
+  mondemand_server_stats:init_backend (WorkerModule, stats_sent_count),
+  mondemand_server_stats:init_backend (WorkerModule, stats_dropped_count),
+  mondemand_server_stats:init_backend (WorkerModule, stats_sent_micros),
+  mondemand_server_stats:init_backend (WorkerModule, connection_errors),
+  mondemand_server_stats:init_backend (WorkerModule, send_errors),
 
   % config is grabbed from the server
-  Config = mondemand_server_config:backend_config (ConfigKey),
+  Config = mondemand_server_config:backend_config (WorkerModule),
 
   TransportMod = proplists:get_value (transport_mod, Config, undefined),
-
   Prefix = proplists:get_value (prefix, Config),
   ReconnectMin = proplists:get_value (reconnect_min, Config, 10),
   ReconnectMax = proplists:get_value (reconnect_max, Config, 30000),
@@ -49,11 +56,13 @@ init ([Name]) ->
 
   case TransportMod:init (Config) of
     {ok, Transport} ->
+      gproc_pool:connect_worker (SupervisorName, WorkerName),
       State = #state {
                 transport = Transport,
                 transport_mod = TransportMod,
                 prefix = Prefix,
-                name = Name,
+                worker_name = WorkerName,
+                worker_mod = WorkerModule,
                 handler_mod = HandlerMod,
                 reconnect_min = ReconnectMin,
                 reconnect_max = ReconnectMax
@@ -63,19 +72,6 @@ init ([Name]) ->
       {stop, E}
   end.
 
-handle_call ({stats}, _From,
-             State = #state { events_processed = EventsProcessed,
-                              stats_sent_count = StatsSent,
-                              stats_dropped_count = StatsDropped,
-                              stats_sent_micros = StatsSentMicros,
-                              connection_errors = ConnectionErrors,
-                              send_errors = SendErrors }) ->
-  { reply, dict:from_list ([ {events_processed, EventsProcessed},
-                             {stats_sent_count, StatsSent},
-                             {stats_dropped_count, StatsDropped},
-                             {stats_sent_micros, StatsSentMicros},
-                             {connection_errors, ConnectionErrors},
-                             {send_errors, SendErrors } ]), State };
 handle_call (Request, From, State) ->
   error_logger:warning_msg ("~p : Unrecognized call ~p from ~p~n",
                             [?MODULE, Request, From]),
@@ -88,45 +84,40 @@ handle_call (Request, From, State) ->
 handle_cast ({process, Binary},
              State = #state { transport = Transport,
                               transport_mod = TransportMod,
+                              worker_mod = WorkerModule,
                               prefix = Prefix,
-                              handler_mod = HandlerMod,
-                              events_processed = EventProcessed,
-                              stats_sent_count = StatsSent,
-                              stats_dropped_count = StatsDropped,
-                              send_errors = SendErrors
+                              handler_mod = HandlerMod
                             }) ->
   {NumBad, NumGood, Lines} =
     mondemand_backend_stats_formatter:process_event (Prefix,
                                                      Binary, HandlerMod),
+
+  mondemand_server_stats:increment_backend (WorkerModule, events_processed),
+
   case TransportMod:connected (Transport) of
     false ->
+      mondemand_server_stats:increment_backend
+        (WorkerModule, stats_dropped_count, NumBad + NumGood),
       % Not connected, let the reconnect logic reconnect, just drop for now
-      { noreply,
-        State#state { events_processed = EventProcessed + 1,
-                      stats_dropped_count = StatsDropped + NumBad + NumGood
-                    }
-      };
+      { noreply, State };
     true ->
       case TransportMod:send (Transport, Lines) of
         {ok, NewTransport} ->
-          { noreply, State#state {
-                       transport = NewTransport,
-                       events_processed = EventProcessed + 1,
-                       stats_dropped_count = StatsDropped + NumBad,
-                       stats_sent_count = StatsSent + NumGood
-                     }
-          };
+
+          mondemand_server_stats:increment_backend
+            (WorkerModule, stats_dropped_count, NumBad),
+          mondemand_server_stats:increment_backend
+            (WorkerModule, stats_sent_count, NumGood),
+
+          { noreply, State#state { transport = NewTransport } };
         {_, NewTransport} ->
-          { noreply, try_connect (
-                       State#state {
-                         transport = NewTransport,
-                         events_processed = EventProcessed + 1,
-                         stats_dropped_count =
-                           StatsDropped + NumBad + NumGood,
-                         send_errors = SendErrors + 1
-                       }
-                     )
-          }
+
+          mondemand_server_stats:increment_backend
+            (WorkerModule, stats_dropped_count, NumBad + NumGood),
+          mondemand_server_stats:increment_backend
+            (WorkerModule, send_errors),
+
+          { noreply, try_connect (State#state { transport = NewTransport }) }
       end
   end;
 handle_cast (Request, State) ->
@@ -138,10 +129,8 @@ handle_info (try_connect, State) ->
 handle_info (Other, State = #state { transport = Transport,
                                      transport_mod = TransportMod,
                                      handler_mod = HandlerMod,
-                                     response_state = PreviousResponseState,
-                                     connection_errors = ConnectErrors,
-                                     stats_sent_count = StatsSent,
-                                     stats_dropped_count = StatsDropped
+                                     worker_mod = WorkerModule,
+                                     response_state = PreviousResponseState
                                    }) ->
   % first we let the transport a chance to handle the response, mostly
   % to unpack and handle errors, then it's handed to the handler to
@@ -150,17 +139,24 @@ handle_info (Other, State = #state { transport = Transport,
     { ok, NewTransport, TransportResponse } ->
       { Errors, NewResponseState } =
         HandlerMod:handle_response (TransportResponse, PreviousResponseState),
+
+      mondemand_server_stats:increment_backend
+        (WorkerModule, stats_dropped_count, Errors),
+      mondemand_server_stats:increment_backend
+        (WorkerModule, stats_sent_count, -Errors),
+
       { noreply, State#state { transport = NewTransport,
-                               response_state = NewResponseState,
-                               stats_sent_count = StatsSent - Errors,
-                               stats_dropped_count = StatsDropped + Errors
+                               response_state = NewResponseState
                              }
       };
     { error, NewTransport } ->
+
+      mondemand_server_stats:increment_backend
+        (WorkerModule, connection_errors),
+
       { noreply, try_connect (
                    State#state {
                      transport = NewTransport,
-                     connection_errors = ConnectErrors + 1,
                      response_state = undefined
                    }
                  )
@@ -194,7 +190,7 @@ reconnect_time ( #state { reconnect_max = Max, reconnect_time = T } ) ->
 
 try_connect (State = #state { transport = Transport,
                               transport_mod = TransportMod,
-                              connection_errors = ConnectErrors
+                              worker_mod = WorkerModule
                             } ) ->
   % close the old connection
   TransportMod:close (Transport),
@@ -209,10 +205,11 @@ try_connect (State = #state { transport = Transport,
         "~p : connection with ~p failed with ~p, "
         "trying again in ~p milliseconds",
         [self(), TransportMod, Error, ReconnectTime]),
+      mondemand_server_stats:increment_backend
+        (WorkerModule, connection_errors),
       erlang:send_after (ReconnectTime, self(), try_connect),
 
-      State#state { reconnect_time = ReconnectTime,
-                    connection_errors = ConnectErrors + 1  }
+      State#state { reconnect_time = ReconnectTime }
   end.
 
 

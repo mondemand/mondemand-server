@@ -8,8 +8,8 @@
 %% mondemand_backend callbacks
 -export ([ start_link/1,
            process/1,
-           stats/0,
-           required_apps/0
+           required_apps/0,
+           type/0
          ]).
 
 %% gen_server callbacks
@@ -23,8 +23,7 @@
 
 -record (state, { config,
                   root,
-                  fields,
-                  stats = dict:new ()
+                  fields
                 }).
 
 %%====================================================================
@@ -36,11 +35,11 @@ start_link (Config) ->
 process (Event) ->
   gen_server:cast (?MODULE, {process, Event}).
 
-stats () ->
-  gen_server:call (?MODULE, {stats}).
-
 required_apps () ->
   [ ].
+
+type () ->
+  worker.
 
 %%====================================================================
 %% gen_server callbacks
@@ -57,20 +56,16 @@ init (Config) ->
   mondemand_server_util:mkdir_p (Dir),
 
   % initialize all stats to zero
-  InitialStats =
-    mondemand_server_util:initialize_stats ([ errors, processed ] ),
+  mondemand_server_stats:init_backend (?MODULE, events_processed),
+  mondemand_server_stats:init_backend (?MODULE, errors),
 
   { ok, #state {
           config = Config,
           root = filename:join (Dir),
-          fields = Fields,
-          stats = InitialStats
+          fields = Fields
         }
   }.
 
-handle_call ({stats}, _From,
-             State = #state { stats = Stats }) ->
-  { reply, Stats, State };
 handle_call (Request, From, State) ->
   error_logger:warning_msg ("~p : Unrecognized call ~p from ~p~n",
                             [?MODULE, Request, From]),
@@ -78,45 +73,46 @@ handle_call (Request, From, State) ->
 
 handle_cast ({process, Binary},
              State = #state { root = Dir,
-                              fields = Fields,
-                              stats = Stats }) ->
+                              fields = Fields }) ->
   Event =  lwes_event:from_udp_packet (Binary, json_eep18),
-  NewStats =
-    case Event of
-      {PL} when is_list (PL) ->
-        Owner =
-          normalize_to_binary (
-            proplists:get_value (<<"mondemand.owner">>, PL, <<"unknown">>)),
-        Id =
-          normalize_to_binary (
-            proplists:get_value (<<"mondemand.trace_id">>, PL, <<"unknown">>)),
-        ProgId =
-          proplists:get_value (<<"mondemand.prog_id">>, PL, <<"unknown">>),
-        ReceiptTime =
-          list_to_binary (integer_to_list (
-              proplists:get_value (<<"ReceiptTime">>, PL))),
-        ExtraFields =
-          lists:flatten ([ proplists:get_value (F, PL, [])
-                           || F <- Fields ]),
 
-        case mondemand_server_util:mkdir_p ([Dir, Owner, Id]) of
-          {error, E1} ->
-            error_logger:error_msg ("got error ~p on mkdir for ~p",
-                                    [E1,Event]),
-            mondemand_server_util:increment_stat (errors, Stats);
-          ok ->
-            case attempt_write (Dir, Owner, Id, ReceiptTime, ProgId,
-                                ExtraFields, Event, 0) of
-              ok ->
-                mondemand_server_util:increment_stat (processed, Stats);
-              {error, _} ->
-                mondemand_server_util:increment_stat (errors, Stats)
-            end
-        end;
-      _ ->
-        mondemand_server_util:increment_stat (errors, Stats)
-    end,
-  { noreply, State#state { stats = NewStats } };
+  mondemand_server_stats:increment_backend (?MODULE, events_processed),
+
+  case Event of
+    {PL} when is_list (PL) ->
+      Owner =
+        normalize_to_binary (
+          proplists:get_value (<<"mondemand.owner">>, PL, <<"unknown">>)),
+      Id =
+        normalize_to_binary (
+          proplists:get_value (<<"mondemand.trace_id">>, PL, <<"unknown">>)),
+      ProgId =
+        proplists:get_value (<<"mondemand.prog_id">>, PL, <<"unknown">>),
+      ReceiptTime =
+        list_to_binary (integer_to_list (
+            proplists:get_value (<<"ReceiptTime">>, PL))),
+      ExtraFields =
+        lists:flatten ([ proplists:get_value (F, PL, [])
+                         || F <- Fields ]),
+
+      case mondemand_server_util:mkdir_p ([Dir, Owner, Id]) of
+        {error, E1} ->
+          error_logger:error_msg ("got error ~p on mkdir for ~p",
+                                  [E1,Event]),
+          mondemand_server_stats:increment_backend (?MODULE, errors);
+        ok ->
+          case attempt_write (Dir, Owner, Id, ReceiptTime, ProgId,
+                              ExtraFields, Event, 0) of
+            ok ->
+              ok;
+            {error, _} ->
+              mondemand_server_stats:increment_backend (?MODULE, errors)
+          end
+      end;
+    _ ->
+      mondemand_server_stats:increment_backend (?MODULE, errors)
+  end,
+  { noreply, State };
 handle_cast (Request, State) ->
   error_logger:warning_msg ("~p : Unrecognized cast ~p~n",[?MODULE, Request]),
   { noreply, State }.

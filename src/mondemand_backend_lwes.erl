@@ -9,8 +9,8 @@
 %% mondemand_backend callbacks
 -export ([ start_link/1,
            process/1,
-           stats/0,
-           required_apps/0
+           required_apps/0,
+           type/0
          ]).
 
 %% gen_server callbacks
@@ -23,8 +23,7 @@
          ]).
 
 -record (state, { config,
-                  channels,
-                  stats = dict:new ()
+                  channels
                 }).
 
 %%====================================================================
@@ -36,11 +35,11 @@ start_link (Config) ->
 process (Event) ->
   gen_server:cast (?MODULE, {process, Event}).
 
-stats () ->
-  gen_server:call (?MODULE, {stats}).
-
 required_apps () ->
   [ lwes ].
+
+type () ->
+  worker.
 
 %%====================================================================
 %% gen_server callbacks
@@ -50,29 +49,23 @@ init (Config) ->
 
   case lwes:open (emitter, LwesConfig) of
     {ok, Channels} ->
+      mondemand_server_stats:init_backend (?MODULE, events_processed),
       {ok, #state { config = LwesConfig,
                     channels = Channels }};
     {error, E} ->
       {stop, {error, E}}
   end.
 
-handle_call ({stats}, _From,
-             State = #state { stats = Stats }) ->
-  { reply, Stats, State };
 handle_call (Request, From, State) ->
   error_logger:warning_msg ("~p : Unrecognized call ~p from ~p~n",
                             [?MODULE, Request, From]),
   { reply, ok, State }.
 
 handle_cast ({process, {udp,_Port,_SenderIp,_SenderPort,Event}},
-             State = #state { channels = ChannelsIn,
-                              stats = Stats
-                            }) ->
+             State = #state { channels = ChannelsIn }) ->
   ChannelsOut = lwes:emit (ChannelsIn, Event),
-  NewStats =
-    mondemand_server_util:increment_stat (events_processed, 1, Stats),
-
-  { noreply, State#state { channels = ChannelsOut, stats = NewStats } };
+  mondemand_server_stats:increment_backend (?MODULE, events_processed),
+  { noreply, State#state { channels = ChannelsOut } };
 
 handle_cast (Request, State) ->
   error_logger:warning_msg ("~p : Unrecognized cast ~p~n",[?MODULE, Request]),
