@@ -13,7 +13,7 @@
 %%====================================================================
 start () ->
   Apps = lists:append ( [ [ sasl, lwes, mondemand, crypto, gproc,
-                            sidejob, afunix, inets, asn1, public_key,
+                            afunix, inets, asn1, public_key,
                             ssl, xmerl, compiler, syntax_tools, mochiweb,
                             webmachine ],
                           mondemand_server_config:applications_to_start(),
