@@ -57,7 +57,7 @@ init (Config) ->
 
   % initialize all stats to zero
   mondemand_server_stats:init_backend (?MODULE, events_processed),
-  mondemand_server_stats:init_backend (?MODULE, errors),
+  mondemand_server_stats:init_backend (?MODULE, send_errors),
 
   { ok, #state {
           config = Config,
@@ -99,18 +99,18 @@ handle_cast ({process, Binary},
         {error, E1} ->
           error_logger:error_msg ("got error ~p on mkdir for ~p",
                                   [E1,Event]),
-          mondemand_server_stats:increment_backend (?MODULE, errors);
+          mondemand_server_stats:increment_backend (?MODULE, send_errors);
         ok ->
           case attempt_write (Dir, Owner, Id, ReceiptTime, ProgId,
                               ExtraFields, Event, 0) of
             ok ->
               ok;
             {error, _} ->
-              mondemand_server_stats:increment_backend (?MODULE, errors)
+              mondemand_server_stats:increment_backend (?MODULE, send_errors)
           end
       end;
     _ ->
-      mondemand_server_stats:increment_backend (?MODULE, errors)
+      mondemand_server_stats:increment_backend (?MODULE, send_errors)
   end,
   { noreply, State };
 handle_cast (Request, State) ->

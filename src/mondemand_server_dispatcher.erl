@@ -62,7 +62,7 @@ code_change (_OldVsn, State, _Extra) ->
 %%====================================================================
 
 dispatch_one (Event, Dispatch) ->
-  mondemand_server_stats:increment (event_received),
+  mondemand_server_stats:increment (events_received),
 
   % call handlers for each event type
   case lwes_event:peek_name_from_udp (Event) of
@@ -89,5 +89,3 @@ dispatch_one (Event, Dispatch) ->
           end
       end
   end.
-
-

@@ -41,7 +41,8 @@ init ([SupervisorName, WorkerName, WorkerModule]) ->
   mondemand_server_stats:init_backend (WorkerModule, events_processed),
   mondemand_server_stats:init_backend (WorkerModule, stats_sent_count),
   mondemand_server_stats:init_backend (WorkerModule, stats_dropped_count),
-  mondemand_server_stats:init_backend (WorkerModule, stats_sent_micros),
+  mondemand_server_stats:init_backend (WorkerModule, stats_process_millis),
+  mondemand_server_stats:init_backend (WorkerModule, stats_send_millis),
   mondemand_server_stats:init_backend (WorkerModule, connection_errors),
   mondemand_server_stats:init_backend (WorkerModule, send_errors),
 
@@ -88,10 +89,16 @@ handle_cast ({process, Binary},
                               prefix = Prefix,
                               handler_mod = HandlerMod
                             }) ->
+  PreProcess = os:timestamp (),
   {NumBad, NumGood, Lines} =
     mondemand_backend_stats_formatter:process_event (Prefix,
                                                      Binary, HandlerMod),
+  PostProcess = os:timestamp (),
+  ProcessMillis =
+    webmachine_util:now_diff_milliseconds (PostProcess, PreProcess),
 
+  mondemand_server_stats:increment_backend
+    (WorkerModule, stats_process_millis, ProcessMillis),
   mondemand_server_stats:increment_backend (WorkerModule, events_processed),
 
   case TransportMod:connected (Transport) of
@@ -101,9 +108,15 @@ handle_cast ({process, Binary},
       % Not connected, let the reconnect logic reconnect, just drop for now
       { noreply, State };
     true ->
+      SendStart = os:timestamp (),
       case TransportMod:send (Transport, Lines) of
         {ok, NewTransport} ->
+          SendFinish = os:timestamp (),
+          SendMillis =
+            webmachine_util:now_diff_milliseconds (SendFinish, SendStart),
 
+          mondemand_server_stats:increment_backend
+            (WorkerModule, stats_send_millis, SendMillis),
           mondemand_server_stats:increment_backend
             (WorkerModule, stats_dropped_count, NumBad),
           mondemand_server_stats:increment_backend
@@ -111,7 +124,12 @@ handle_cast ({process, Binary},
 
           { noreply, State#state { transport = NewTransport } };
         {_, NewTransport} ->
+          SendFinish = os:timestamp (),
+          SendMillis =
+            webmachine_util:now_diff_milliseconds (SendFinish, SendStart),
 
+          mondemand_server_stats:increment_backend
+            (WorkerModule, stats_send_millis, SendMillis),
           mondemand_server_stats:increment_backend
             (WorkerModule, stats_dropped_count, NumBad + NumGood),
           mondemand_server_stats:increment_backend
