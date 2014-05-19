@@ -1,3 +1,6 @@
+* Mon May 19 2014 Anthony Molinaro <anthonym@alumni.caltech.edu> 1.6.0
+- add timing information for processing and sending of stats
+
 * Mon May 19 2014 Anthony Molinaro <anthonym@alumni.caltech.edu> 1.5.1
 - forgot to add mondemand to apps to start
 - removed references to sidejob since it's no longer used
