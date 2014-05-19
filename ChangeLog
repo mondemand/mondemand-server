@@ -1,3 +1,7 @@
+* Mon May 19 2014 Anthony Molinaro <anthonym@alumni.caltech.edu> 1.5.1
+- forgot to add mondemand to apps to start
+- removed references to sidejob since it's no longer used
+
 * Sat May 17 2014 Anthony Molinaro <anthonym@alumni.caltech.edu> 1.5.0
 - replace sidejob with gproc_pool
 - added mondemand and use it for internal metrics
