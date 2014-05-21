@@ -48,7 +48,7 @@ init([SupervisorName, WorkerTypeModule, NumWorkers, WorkerModule]) ->
             transient,
             2000,
             worker,
-            [mondemand_backend_worker]
+            [WorkerTypeModule]
           }
         end
         || N
