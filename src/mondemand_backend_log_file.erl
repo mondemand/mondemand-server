@@ -7,7 +7,7 @@
 
 %% mondemand_backend callbacks
 -export ([ start_link/1,
-           process/1,
+           process/2,
            required_apps/0,
            type/0
          ]).
@@ -32,8 +32,8 @@
 start_link (Config) ->
   gen_server:start_link ( { local, ?MODULE }, ?MODULE, Config, []).
 
-process (Event) ->
-  gen_server:cast (?MODULE, {process, Event}).
+process (Event, Timestamp) ->
+  gen_server:cast (?MODULE, {process, Event, Timestamp}).
 
 required_apps () ->
   [ ].
@@ -66,15 +66,14 @@ handle_call (Request, From, State) ->
                             [?MODULE, Request, From]),
   { reply, ok, State }.
 
-handle_cast ({process, Binary},
+handle_cast ({process, Binary, Timestamp},
              State = #state { root = Dir,
                               context_delimiter = Delimiter
                             }) ->
   Event =  lwes_event:from_udp_packet (Binary, dict),
   #lwes_event { attrs = Data } = Event,
 
-  Timestamp = dict:fetch (<<"ReceiptTime">>, Data),
-  DateTime = mondemand_server_util:epoch_to_mdyhms (Timestamp),
+  DateTime = mondemand_server_util:now_to_mdyhms (Timestamp),
 
   Num = dict:fetch (<<"num">>, Data),
   ProgId = dict:fetch (<<"prog_id">>, Data),

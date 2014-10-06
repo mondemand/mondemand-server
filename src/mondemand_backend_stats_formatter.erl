@@ -2,17 +2,14 @@
 
 -include_lib ("lwes/include/lwes.hrl").
 
--export ([process_event/3]).
+-export ([process_event/4]).
 
-process_event (Prefix, Binary, HandlerMod) ->
+process_event (Prefix, Binary, Timestamp, HandlerMod) ->
   % deserialize the event as a dictionary
   Event =  lwes_event:from_udp_packet (Binary, dict),
 
   % grab out the attributes
   #lwes_event { attrs = Data } = Event,
-
-  % here's the timestamp
-  Timestamp = trunc (dict:fetch (<<"ReceiptTime">>, Data) / 1000),
 
   % here's the name of the program which originated the metric
   ProgId = dict:fetch (<<"prog_id">>, Data),

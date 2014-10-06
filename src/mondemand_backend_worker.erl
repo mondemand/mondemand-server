@@ -69,7 +69,7 @@ handle_call (Request, From, State) ->
                             [?MODULE, Request, From]),
   { reply, ok, State }.
 
-handle_cast ({process, Binary},
+handle_cast ({process, Binary, Timestamp},
              State = #state { handler_mod = HandlerMod,
                               worker = Worker,
                               worker_mod = WorkerModule
@@ -77,7 +77,9 @@ handle_cast ({process, Binary},
   PreProcess = os:timestamp (),
   {NumBad, NumGood, Lines} =
     mondemand_backend_stats_formatter:process_event (undefined,
-                                                     Binary, HandlerMod),
+                                                     Binary,
+                                                     Timestamp,
+                                                     HandlerMod),
   PostProcess = os:timestamp (),
   ProcessMillis =
     webmachine_util:now_diff_milliseconds (PostProcess, PreProcess),

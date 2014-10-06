@@ -1,0 +1,33 @@
+Possible new config structure?
+
+ { pipeline,
+   [ { lwes_dispatch_module, [
+         { "Mondemand::StatsMsg",
+           [
+             { deserialize_module, [
+                 { '*', [
+                     { dispatch_to_external, [
+                         { '*', [ rrd, opentsdb, riemann ] }
+                       ]
+                     },
+                     { summarize, [
+                         { '*', [ rrd, opentsdb, influxdb, graphite ] }
+                       ]
+                     }
+                   ]
+                 }
+               ]
+             }
+           ]
+         },
+         { "*", [
+           ]
+         }
+       ]
+     }
+   ]
+ }
+
+ { lwes_dispatch_module, [ { port, 20502} ] }
+
+

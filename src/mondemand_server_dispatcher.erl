@@ -20,7 +20,9 @@ start_link (Dispatch, WorkerAtom, Name) ->
   gen_server:start_link ({local, WorkerAtom}, ?MODULE, [Dispatch, Name], []).
 
 dispatch (Pid, Event) ->
-  gen_server:cast (Pid, {dispatch, Event}).
+  % keep track of our own receipt time, as there could be some delay downstream
+  Timestamp = os:timestamp (),
+  gen_server:cast (Pid, {dispatch, Event, Timestamp}).
 
 %%====================================================================
 %% gen_server callbacks
@@ -37,11 +39,11 @@ handle_call (Request, From, State) ->
                             [?MODULE, Request, From]),
   { reply, ok, State }.
 
-handle_cast ({dispatch, Event},
+handle_cast ({dispatch, Event, Timestamp},
              State = #state { dispatch = Dispatch,
                               events_processed = EventsProcessed
                             }) ->
-  dispatch_one (Event, Dispatch),
+  dispatch_one (Event, Dispatch, Timestamp),
   { noreply, State#state { events_processed = EventsProcessed + 1 } };
 handle_cast (Request, State) ->
   error_logger:warning_msg ("~p : Unrecognized cast ~p~n",[?MODULE, Request]),
@@ -61,7 +63,7 @@ code_change (_OldVsn, State, _Extra) ->
 %% internal functions
 %%====================================================================
 
-dispatch_one (Event, Dispatch) ->
+dispatch_one (Event, Dispatch, Timestamp) ->
   mondemand_server_stats:increment (events_received),
 
   % call handlers for each event type
@@ -74,13 +76,13 @@ dispatch_one (Event, Dispatch) ->
       % the handlers for that name
       case dict:find (EventName, Dispatch) of
         {ok, V} ->
-          [ M:process(Event) || M <- V ],
+          [ M:process (Event, Timestamp) || M <- V ],
           mondemand_server_stats:increment (events_dispatched);
         error ->
           % if we don't find the name, we send through any "*" handlers
           case dict:find ("*", Dispatch) of
             {ok, DV} ->
-              [ M:process(Event) || M <- DV ],
+              [ M:process (Event, Timestamp) || M <- DV ],
               mondemand_server_stats:increment (events_dispatched);
             error ->
               mondemand_server_stats:increment (dispatcher_errors),

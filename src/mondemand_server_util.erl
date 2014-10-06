@@ -6,7 +6,15 @@
 -compile({parse_transform, ct_expand}).
 
 -export ([seconds_since_epoch/0,
+          millisecond_since_epoch/0,
+          now_to_mdyhms/1,
+          now_to_epoch_ms/1,
+          now_to_epoch_secs/1,
+          now_to_epoch_minutes/1,
+          millis_to_next_round_second/1,
           epoch_to_mdyhms/1,
+          epoch_secs_to_now/1,
+          mdyhms_to_epoch_secs/1,
           mdyhms_to_dir_prefix/1,
           mdyhms_to_log_string/1,
           mkdir_p/1,
@@ -33,12 +41,44 @@ seconds_since_epoch () ->
   {Mega, Secs, _ } = os:timestamp(),
   Mega * 1000000 + Secs.
 
-epoch_to_mdyhms(MilliSeconds) ->
+millisecond_since_epoch () ->
+  {Meg, Sec, Mic} = os:timestamp(),
+  trunc (Meg * 1000000000 + Sec * 1000 + Mic / 1000).
+
+now_to_epoch_ms ({Meg, Sec, Mic}) ->
+  trunc (Meg * 1000000000 + Sec * 1000 + Mic / 1000).
+
+now_to_epoch_secs ({Mega, Secs, _}) ->
+  Mega * 1000000 + Secs.
+
+now_to_epoch_minutes (Now) ->
+  trunc (now_to_epoch_secs (Now) / 60).
+
+
+epoch_secs_to_now (Seconds) ->
+  { Seconds div 1000000, Seconds rem 1000000, 0 }.
+
+millis_to_next_round_second ({Mega, Secs, Mic}) ->
+  SecsSinceEpoch = Mega * 1000000 + Secs,
+  MillisSinceEpoch = trunc (Mega * 1000000000 + Secs * 1000 + Mic / 1000),
+  NextMillisSec = (SecsSinceEpoch + 1) * 1000,
+  NextMillisSec - MillisSinceEpoch.
+
+now_to_mdyhms (Now) ->
+  calendar:now_to_universal_time (Now).
+
+epoch_to_mdyhms (MilliSeconds) ->
   calendar:now_to_universal_time (
     {MilliSeconds div 1000000000,
      MilliSeconds rem 1000000000 div 1000,
      MilliSeconds rem 1000000000 rem 1000
     }).
+
+mdyhms_to_epoch_secs (DateTime) ->
+  Beginning = ct_expand:term (
+    calendar:datetime_to_gregorian_seconds({{1970,1,1}, {0,0,0}})
+  ),
+  calendar:datetime_to_gregorian_seconds(DateTime) - Beginning.
 
 mdyhms_to_dir_prefix ({{Year, Month, Day}, {_, _, _}}) ->
   filename:join ([ io_lib:fwrite ("~4..0B",[Year]),

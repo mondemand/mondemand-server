@@ -7,7 +7,7 @@
 
 %% mondemand_backend callbacks
 -export ([ start_link/1,
-           process/1,
+           process/2,
            required_apps/0,
            type/0
          ]).
@@ -30,8 +30,8 @@
 start_link (Config) ->
   gen_server:start_link ( { local, ?MODULE }, ?MODULE, Config, []).
 
-process (Event) ->
-  gen_server:cast (?MODULE, {process, Event}).
+process (Event, Timestamp) ->
+  gen_server:cast (?MODULE, {process, Event, Timestamp}).
 
 required_apps () ->
   [ ].
@@ -62,7 +62,7 @@ handle_call (Request, From, State) ->
                             [?MODULE, Request, From]),
   { reply, ok, State }.
 
-handle_cast ({process, Event}, #state { journal = Journal }) ->
+handle_cast ({process, Event, _}, #state { journal = Journal }) ->
   JournalOut = lwes_journaller:process_event (Event, Journal),
   mondemand_server_stats:increment_backend (?MODULE, events_processed),
   {noreply, #state { journal = JournalOut }};

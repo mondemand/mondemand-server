@@ -4,7 +4,7 @@
 
 behaviour_info(callbacks) ->
   [ {start_link, 1},
-    {process, 1},
+    {process, 2},
     {required_apps, 0},
     {type, 0}
   ];

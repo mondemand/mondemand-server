@@ -3,7 +3,7 @@
 -behaviour (supervisor).
 
 %% API
--export ([start_link/4, process/2, stats/1]).
+-export ([start_link/4, process/3, stats/1]).
 
 %% supervisor callbacks
 -export ([init/1]).
@@ -16,9 +16,9 @@ start_link (SupervisorName, WorkerTypeModule, NumWorkers, WorkerModule) ->
                         [ SupervisorName, WorkerTypeModule,
                           NumWorkers, WorkerModule]).
 
-process (SupervisorName, Event) ->
+process (SupervisorName, Event, Timestamp) ->
   Pid = gproc:where (gproc_pool:pick (SupervisorName)),
-  gen_server:cast (Pid, {process, Event}).
+  gen_server:cast (Pid, {process, Event, Timestamp}).
 
 stats (SupervisorName) ->
   [

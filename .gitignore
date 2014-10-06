@@ -2,3 +2,4 @@ deps
 ebin
 tmp
 .eunit
+.rebar

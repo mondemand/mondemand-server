@@ -82,7 +82,7 @@ handle_call (Request, From, State) ->
 % when we don't have a connection we don't want keep trying the backend
 % thus the reconnecting logic, so we still process the event to figure
 % out how many we are dropping then just increment a counter
-handle_cast ({process, Binary},
+handle_cast ({process, Binary, Timestamp},
              State = #state { transport = Transport,
                               transport_mod = TransportMod,
                               worker_mod = WorkerModule,
@@ -92,7 +92,9 @@ handle_cast ({process, Binary},
   PreProcess = os:timestamp (),
   {NumBad, NumGood, Lines} =
     mondemand_backend_stats_formatter:process_event (Prefix,
-                                                     Binary, HandlerMod),
+                                                     Binary,
+                                                     Timestamp,
+                                                     HandlerMod),
   PostProcess = os:timestamp (),
   ProcessMillis =
     webmachine_util:now_diff_milliseconds (PostProcess, PreProcess),

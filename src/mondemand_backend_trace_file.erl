@@ -7,7 +7,7 @@
 
 %% mondemand_backend callbacks
 -export ([ start_link/1,
-           process/1,
+           process/2,
            required_apps/0,
            type/0
          ]).
@@ -32,8 +32,8 @@
 start_link (Config) ->
   gen_server:start_link ( { local, ?MODULE }, ?MODULE, Config, []).
 
-process (Event) ->
-  gen_server:cast (?MODULE, {process, Event}).
+process (Event, Timestamp) ->
+  gen_server:cast (?MODULE, {process, Event, Timestamp}).
 
 required_apps () ->
   [ ].
@@ -71,7 +71,7 @@ handle_call (Request, From, State) ->
                             [?MODULE, Request, From]),
   { reply, ok, State }.
 
-handle_cast ({process, Binary},
+handle_cast ({process, Binary, Timestamp},
              State = #state { root = Dir,
                               fields = Fields }) ->
   Event =  lwes_event:from_udp_packet (Binary, json_eep18),
@@ -90,7 +90,7 @@ handle_cast ({process, Binary},
         proplists:get_value (<<"mondemand.prog_id">>, PL, <<"unknown">>),
       ReceiptTime =
         list_to_binary (integer_to_list (
-            proplists:get_value (<<"ReceiptTime">>, PL))),
+            mondemand_server_util:now_to_epoch_ms (Timestamp))),
       ExtraFields =
         lists:flatten ([ proplists:get_value (F, PL, [])
                          || F <- Fields ]),
@@ -181,6 +181,8 @@ attempt_write (Dir, Owner, Id, ReceiptTime, ProgId, ExtraFields,
       end
   end.
 
+normalize_to_binary (F) when is_float (F) ->
+  list_to_binary (float_to_list (F));
 normalize_to_binary (I) when is_integer (I) ->
   list_to_binary (integer_to_list (I));
 normalize_to_binary (L) when is_list (L) ->
