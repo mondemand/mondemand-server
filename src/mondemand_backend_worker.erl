@@ -59,10 +59,15 @@ init ([SupervisorName, WorkerName, WorkerModule]) ->
   WorkerMod = proplists:get_value (worker_mod, Config, undefined),
 
   gproc_pool:connect_worker (SupervisorName, WorkerName),
-  {ok, #state { name = WorkerName,
-                handler_mod = HandlerMod,
-                worker = WorkerMod:create (Config),
-                worker_mod = WorkerMod }}.
+  case WorkerMod:create (Config) of
+    {error, E} ->
+      {stop, {error, E} };
+    WorkerState ->
+      {ok, #state { name = WorkerName,
+                    handler_mod = HandlerMod,
+                    worker = WorkerState,
+                    worker_mod = WorkerMod }}
+  end.
 
 handle_call (Request, From, State) ->
   error_logger:warning_msg ("~p : Unrecognized call ~p from ~p~n",

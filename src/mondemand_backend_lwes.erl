@@ -23,7 +23,8 @@
          ]).
 
 -record (state, { config,
-                  channels
+                  channels,
+                  extra_context
                 }).
 
 %%====================================================================
@@ -46,12 +47,15 @@ type () ->
 %%====================================================================
 init (Config) ->
   LwesConfig = proplists:get_value (lwes, Config, undefined),
+  ExtraContext = proplists:get_value (extra_context, Config, undefined),
 
-  case lwes:open (emitter, LwesConfig) of
+  case lwes:open (emitters, LwesConfig) of
     {ok, Channels} ->
       mondemand_server_stats:init_backend (?MODULE, events_processed),
       {ok, #state { config = LwesConfig,
-                    channels = Channels }};
+                    channels = Channels,
+                    extra_context = ExtraContext }
+      };
     {error, E} ->
       {stop, {error, E}}
   end.
@@ -62,7 +66,19 @@ handle_call (Request, From, State) ->
   { reply, ok, State }.
 
 handle_cast ({process, {udp,_Port,_SenderIp,_SenderPort,Event}},
-             State = #state { channels = ChannelsIn }) ->
+             State = #state { channels = ChannelsIn,
+                              extra_context = undefined }) ->
+  ChannelsOut = lwes:emit (ChannelsIn, Event),
+  mondemand_server_stats:increment_backend (?MODULE, events_processed),
+  { noreply, State#state { channels = ChannelsOut } };
+handle_cast ({process, {udp,_Port,_SenderIp,_SenderPort,Packet}},
+             State = #state { channels = ChannelsIn,
+                              extra_context = ExtraContext}) ->
+  Event = mondemand_server_stats_helper:to_lwes (
+            mondemand_server_stats_helper:add_contexts (
+              mondemand_server_stats_helper:from_lwes (Packet),
+              ExtraContext)
+          ),
   ChannelsOut = lwes:emit (ChannelsIn, Event),
   mondemand_server_stats:increment_backend (?MODULE, events_processed),
   { noreply, State#state { channels = ChannelsOut } };
