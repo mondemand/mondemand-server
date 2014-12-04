@@ -191,10 +191,7 @@ normalize_to_binary (B) when is_binary (B) ->
 %%--------------------------------------------------------------------
 %%% Test functions
 %%--------------------------------------------------------------------
--ifdef(HAVE_EUNIT).
+-ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
--endif.
-
--ifdef(EUNIT).
 
 -endif.

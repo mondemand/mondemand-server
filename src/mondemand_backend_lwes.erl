@@ -71,17 +71,31 @@ handle_cast ({process, {udp,_Port,_SenderIp,_SenderPort,Event}},
   ChannelsOut = lwes:emit (ChannelsIn, Event),
   mondemand_server_stats:increment_backend (?MODULE, events_processed),
   { noreply, State#state { channels = ChannelsOut } };
-handle_cast ({process, {udp,_Port,_SenderIp,_SenderPort,Packet}},
+handle_cast ({process, UDP = {udp,_Port,_SenderIp,_SenderPort,Packet}},
              State = #state { channels = ChannelsIn,
                               extra_context = ExtraContext}) ->
-  Event = mondemand_server_stats_helper:to_lwes (
-            mondemand_server_stats_helper:add_contexts (
-              mondemand_server_stats_helper:from_lwes (Packet),
-              ExtraContext)
-          ),
-  ChannelsOut = lwes:emit (ChannelsIn, Event),
-  mondemand_server_stats:increment_backend (?MODULE, events_processed),
-  { noreply, State#state { channels = ChannelsOut } };
+  ChannelsOutFinal =
+    case lwes_event:peek_name_from_udp (UDP) of
+      { error, _ } ->
+        mondemand_server_stats:increment_backend (?MODULE, send_errors),
+        error_logger:error_msg ("Bad event ~p",[UDP]),
+        ChannelsIn;
+      <<"MonDemand::StatsMsg">> -> % FIXME: replace with constant?
+        Event = mondemand_server_stats_helper:to_lwes (
+                  mondemand_server_stats_helper:add_contexts (
+                    mondemand_server_stats_helper:from_lwes (Packet),
+                    ExtraContext)
+                ),
+        ChannelsOut = lwes:emit (ChannelsIn, Event),
+        mondemand_server_stats:increment_backend (?MODULE, events_processed),
+        ChannelsOut;
+      _ ->
+        ChannelsOut = lwes:emit (ChannelsIn, Packet),
+        mondemand_server_stats:increment_backend (?MODULE, events_processed),
+        ChannelsOut
+    end,
+
+  { noreply, State#state { channels = ChannelsOutFinal } };
 
 handle_cast (Request, State) ->
   error_logger:warning_msg ("~p : Unrecognized cast ~p~n",[?MODULE, Request]),

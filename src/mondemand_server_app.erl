@@ -58,10 +58,7 @@ ensure_started(App) ->
 %%--------------------------------------------------------------------
 %%% Test functions
 %%--------------------------------------------------------------------
--ifdef(HAVE_EUNIT).
+-ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
--endif.
-
--ifdef(EUNIT).
 
 -endif.
