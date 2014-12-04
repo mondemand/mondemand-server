@@ -1,3 +1,6 @@
+* Thu Dec 04 2014 Anthony Molinaro <anthonym@alumni.caltech.edu> 1.8.0
+- allow listening on multiple address and port pairs
+
 * Tue Nov 04 2014 Anthony Molinaro <anthonym@alumni.caltech.edu> 1.7.1
 - adding of additional contexts should only work on stats events (for now).
 

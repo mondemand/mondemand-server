@@ -5,7 +5,7 @@
 -behaviour (gen_server).
 
 %% API
--export ([ start_link/1,
+-export ([ start_link/0,
            process_event/2 ]).
 
 %% gen_server callbacks
@@ -17,14 +17,14 @@
            code_change/3
          ]).
 
--record (state, { listener, dispatch }).
+-record (state, { listeners }).
 -record (listener_state, { }).
 
 %%====================================================================
 %% API
 %%====================================================================
-start_link (Config) ->
-  gen_server:start_link ( { local, ?MODULE }, ?MODULE, [Config], []).
+start_link () ->
+  gen_server:start_link ( { local, ?MODULE }, ?MODULE, [], []).
 
 process_event (Event, State) ->
   mondemand_server_dispatcher_sup:dispatch (Event),
@@ -33,18 +33,21 @@ process_event (Event, State) ->
 %%====================================================================
 %% gen_server callbacks
 %%====================================================================
-init ([Dispatch]) ->
-  % lwes listener config
-  { ok, LwesConfig } = application:get_env (mondemand_server, listener),
-
+init ([]) ->
   % I want terminate to be called
   process_flag (trap_exit, true),
 
-  % open lwes channel
-  {ok, Channel} = lwes:open (listener, LwesConfig),
-  ok = lwes:listen (Channel, fun process_event/2, raw, #listener_state{ }),
-
-  { ok, #state { dispatch = Dispatch, listener = Channel } }.
+  % lwes listener config
+  case mondemand_server_config:listener_config () of
+    undefined ->
+      { stop, missing_listener_config };
+    { ok, L } when is_list (L) ->
+      Channels = [ open_lwes_channel (Config) || Config <- L ],
+      { ok, #state {listeners = Channels } };
+    { ok, Config} ->
+      Channel = open_lwes_channel (Config),
+      { ok, #state {listeners = [Channel] } }
+  end.
 
 handle_call (Request, From, State) ->
   error_logger:warning_msg ("Unrecognized call ~p from ~p~n",[Request, From]),
@@ -58,10 +61,26 @@ handle_info (Request, State) ->
   error_logger:warning_msg ("Unrecognized info ~p~n",[Request]),
   {noreply, State}.
 
-terminate (_Reason, #state { listener = Channel }) ->
-  lwes:close (Channel),
+terminate (_Reason, #state { listeners = Channels }) ->
+  [ lwes:close (Channel) || Channel <- Channels ],
   ok.
 
 code_change (_OldVsn, State, _Extra) ->
   {ok, State}.
 
+%%====================================================================
+%% Internal functions
+%%====================================================================
+open_lwes_channel (LwesConfig) ->
+  {ok, Channel} = lwes:open (listener, LwesConfig),
+  ok = lwes:listen (Channel, fun process_event/2, raw, #listener_state{ }).
+
+%%====================================================================
+%% Test functions
+%%====================================================================
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+
+% include test code here
+
+-endif.

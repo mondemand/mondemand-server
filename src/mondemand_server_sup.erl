@@ -22,8 +22,8 @@ start_link() ->
 %% @spec init([]) -> SupervisorTree
 %% @doc supervisor callback.
 init([]) ->
-  mondemand_server_config:set_dispatch (),
-  Dispatch = mondemand_server_config:get_dispatch (dict),
+%  mondemand_server_config:set_dispatch (),
+  Dispatch = mondemand_server_config:dispatch_config (),
   NumDispatchers = mondemand_server_config:num_dispatchers (),
 
   BackendConfigs =
@@ -71,7 +71,7 @@ init([]) ->
         },
         {
           mondemand_server,
-          { mondemand_server, start_link, [Dispatch] },
+          { mondemand_server, start_link, [] },
           permanent,
           2000,
           worker,
@@ -84,10 +84,7 @@ init([]) ->
 %%--------------------------------------------------------------------
 %%% Test functions
 %%--------------------------------------------------------------------
--ifdef(HAVE_EUNIT).
+-ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
--endif.
-
--ifdef(EUNIT).
 
 -endif.

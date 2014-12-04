@@ -41,10 +41,7 @@ server_port () ->
   proplists:get_value (port,
     mondemand_server_config:web_config()).
 
--ifdef(HAVE_EUNIT).
+-ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
--endif.
-
--ifdef(EUNIT).
 
 -endif.
