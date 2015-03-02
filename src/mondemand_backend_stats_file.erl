@@ -89,9 +89,11 @@ handle_cast ({process, Binary},
       fun (E, A) ->
         K = dict:fetch (mondemand_server_util:stat_key (E), Data),
         V = dict:fetch (mondemand_server_util:stat_val (E), Data),
+        T = dict:fetch (mondemand_server_util:stat_type (E), Data),
 
-        RawLogLine = io_lib:format ("~s\t~s\t~p\t~s\n",
+        RawLogLine = io_lib:format ("~s\t~s\t~s\t~p\t~s\n",
           [ mondemand_server_util:mdyhms_to_log_string (DateTime),
+            binary_to_list (T),
             binary_to_list (K),
             V,
             ContextString]),
