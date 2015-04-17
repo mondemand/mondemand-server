@@ -8,6 +8,7 @@ exec erl \
   -name md_server -setcookie md_server \
   $deps \
   -pa ebin \
+  -config mondemand_server.config \
   -config mondemand_server_dev.config \
   -s reloader \
   -s mondemand_server_app

@@ -5,7 +5,7 @@
 behaviour_info(callbacks) ->
   [ {header, 0},
     {separator, 0},
-    {format_stat, 8},
+    {format_stat, 10},
     {footer, 0},
     {handle_response, 2}
   ];
