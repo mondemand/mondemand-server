@@ -34,6 +34,8 @@ connect (State = #md_afunix_state {
       {{error, Error}, State}
   end.
 
+send (State, []) ->
+  {error, State};
 send (State = #md_afunix_state { socket = Socket}, Data) ->
   {afunix:send (Socket, Data), State}.
 

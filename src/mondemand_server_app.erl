@@ -49,16 +49,16 @@ ensure_started(App) ->
     ok ->
       ok;
     {error, {already_started, App}} ->
+      ok;
+    Other ->
+      error_logger:error_msg ("Got ~p",[Other]),
       ok
   end.
 
 %%--------------------------------------------------------------------
 %%% Test functions
 %%--------------------------------------------------------------------
--ifdef(HAVE_EUNIT).
+-ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
--endif.
-
--ifdef(EUNIT).
 
 -endif.

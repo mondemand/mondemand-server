@@ -1,33 +1,15 @@
 -module (mondemand_server_config).
 
 -export ([
-           get_dispatch/1,
-           set_dispatch/0,
            num_dispatchers/0,
            backends_to_start/0,
            applications_to_start/0,
            web_config/0,
+           listener_config/0,
            backend_config/1,
+           dispatch_config/0,
            parse_dispatch/1
          ]).
-
-
-% FIXME: I don't think we need any of this anymore, just need to fix the
-% list of backends code to not require a list then we can just use the dict
-% everywhere, and get rid of mochiglobal use.
-set_dispatch () ->
-  case dispatch() of
-    undefined -> exit (no_dispatch_list);
-    [] -> exit (empty_dispatch_list);
-    Dispatch ->
-      mochiglobal:put (mondemand_dispatch_list, Dispatch),
-      mochiglobal:put (mondemand_dispatch_dict, dict:from_list (Dispatch))
-  end.
-
-get_dispatch (list) ->
-  mochiglobal:get (mondemand_dispatch_list);
-get_dispatch (dict) ->
-  mochiglobal:get (mondemand_dispatch_dict).
 
 num_dispatchers () ->
   case application:get_env (mondemand_server, num_dispatchers) of
@@ -46,10 +28,9 @@ dispatch () ->
   end.
 
 backends_to_start () ->
-  set_dispatch(),
-
-  case get_dispatch (list) of
-    [] -> [];
+  case dispatch () of
+    undefined -> exit (no_dispatch_list);
+    [] -> exit (empty_dispatch_list);
     Dispatch ->
       % determine the unique list of modules to start from the dispatch list
       lists:usort(lists:flatten(lists:foldl(fun({_,L},A)-> [L|A] end,
@@ -58,7 +39,8 @@ backends_to_start () ->
   end.
 
 applications_to_start () ->
-  lists:append ([ Mod:required_apps() || Mod <- backends_to_start () ]).
+  lists:append ([ Mod:required_apps()
+                  || Mod <- backends_to_start () ]).
 
 calculate_web_dispatch (InitialDispatch) ->
   OutputDispatch =
@@ -91,11 +73,17 @@ web_config () ->
       undefined
   end.
 
+listener_config () ->
+  application:get_env (mondemand_server, listener).
+
 backend_config (BackendModule) ->
   case application:get_env (mondemand_server, BackendModule) of
     { ok, T } -> T;
     undefined -> []
   end.
+
+dispatch_config () ->
+  dict:from_list (dispatch ()).
 
 %%--------------------------------------------------------------------
 %%% Internal functions
@@ -157,10 +145,7 @@ parse_dispatch (Dispatch) ->
 %%--------------------------------------------------------------------
 %%% Test functions
 %%--------------------------------------------------------------------
--ifdef(HAVE_EUNIT).
+-ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
--endif.
-
--ifdef(EUNIT).
 
 -endif.

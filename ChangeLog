@@ -1,3 +1,17 @@
+* Wed Apr 01 2015 Anthony Molinaro <anthonym@alumni.caltech.edu> 2.0.0
+- Breaking Change : modified mondemand_server_stats_handler to pass the index
+and total to the format stat call
+- better error reporting
+
+* Thu Dec 04 2014 Anthony Molinaro <anthonym@alumni.caltech.edu> 1.8.0
+- allow listening on multiple address and port pairs
+
+* Tue Nov 04 2014 Anthony Molinaro <anthonym@alumni.caltech.edu> 1.7.1
+- adding of additional contexts should only work on stats events (for now).
+
+* Tue Oct 07 2014 Anthony Molinaro <anthonym@alumni.caltech.edu> 1.7.0
+- setup the lwes backend so that additional contexts can be sent
+
 * Mon May 19 2014 Anthony Molinaro <anthonym@alumni.caltech.edu> 1.6.0
 - add timing information for processing and sending of stats
 

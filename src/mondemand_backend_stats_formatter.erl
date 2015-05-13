@@ -31,11 +31,12 @@ process_event (Prefix, Binary, Timestamp, HandlerMod) ->
         MetricType = dict:fetch (mondemand_server_util:stat_type (E), Data),
         MetricName = dict:fetch (mondemand_server_util:stat_key (E), Data),
         MetricValue = dict:fetch (mondemand_server_util:stat_val (E), Data),
-        case HandlerMod:format_stat (Prefix, ProgId, SenderHost,
+        case HandlerMod:format_stat (Current, Num, Prefix, ProgId, SenderHost,
                                      MetricType, MetricName, MetricValue,
                                      Timestamp, Context)
         of
           error ->
+            error_logger:error_msg ("Bad Data in format Prefix=~p,ProgId=~p,SenderHost=~p,MetricType=~p,MetricName=~p,MetricValue=~p,Timestamp=~p,Context=~p",[Prefix, ProgId, SenderHost, MetricType, MetricName, MetricValue, Timestamp, Context]),
             % if not on the last one, just keep going
             case Current =/= Num of
               true -> { Errors + 1, Okay, Current + 1, List };
@@ -59,4 +60,10 @@ process_event (Prefix, Binary, Timestamp, HandlerMod) ->
       { 0, 0, 1, [] },
       lists:seq (1, Num)
     ),
-  { NumBad, NumGood, [ HandlerMod:header(), Entries, HandlerMod:footer() ] }.
+  case NumGood > 0 of
+    true ->
+      { NumBad, NumGood, [ HandlerMod:header(), Entries, HandlerMod:footer() ] };
+    false ->
+      error_logger:error_msg ("No Good Data ~p",[Event]),
+      { NumBad, NumGood, [] }
+  end.

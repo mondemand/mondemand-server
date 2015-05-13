@@ -41,7 +41,7 @@
 %% mondemand_backend_stats_handler callbacks
 -export ([ header/0,
            separator/0,
-           format_stat/8,
+           format_stat/10,
            footer/0,
            handle_response/2
          ]).
@@ -109,7 +109,7 @@ header () -> undefined.
 
 separator () -> undefined.
 
-format_stat (_Prefix, ProgId, _Host,
+format_stat (_Num, _Total, _Prefix, ProgId, _Host,
              _MetricType, MetricName,
              MetricValue, Timestamp,
              Context) ->

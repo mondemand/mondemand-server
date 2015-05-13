@@ -45,6 +45,8 @@ connect (State = #md_tcp_state {
       {{error, Error}, State}
   end.
 
+send (State, []) ->
+  {error, State};
 send (State = #md_tcp_state { socket = Socket}, Data) ->
   { gen_tcp:send (Socket, Data), State }.
 
