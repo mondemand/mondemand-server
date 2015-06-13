@@ -1,6 +1,7 @@
 -module (mondemand_backend_stats_file).
 
 -include_lib ("lwes/include/lwes.hrl").
+-include_lib ("mondemand/include/mondemand.hrl").
 -include_lib ("kernel/include/file.hrl").
 
 -behaviour (mondemand_server_backend).
@@ -52,8 +53,8 @@ init (Config) ->
   mondemand_server_util:mkdir_p (Dir),
 
   % initialize all stats to zero
-  mondemand_server_stats:init_backend (?MODULE, events_processed),
-  mondemand_server_stats:init_backend (?MODULE, stats_sent_count),
+  mondemand_server_stats:create_backend (?MODULE, events_processed),
+  mondemand_server_stats:create_backend (?MODULE, stats_sent_count),
 
   { ok, #state {
           config = Config,
@@ -67,36 +68,45 @@ handle_call (Request, From, State) ->
                             [?MODULE, Request, From]),
   { reply, ok, State }.
 
-handle_cast ({process, Binary},
+handle_cast ({process, UDP = {udp,_,_,_,_}},
+             State) ->
+  Event = mondemand_event:from_udp (UDP),
+  handle_cast ({process, Event}, State);
+handle_cast ({process, Event = #md_event {}},
              State = #state { root = Dir,
                               context_delimiter = Delimiter
                             }) ->
-  Event =  lwes_event:from_udp_packet (Binary, dict),
-  #lwes_event { attrs = Data } = Event,
+  StatsMsg = mondemand_event:msg (Event),
 
-  Timestamp = dict:fetch (<<"ReceiptTime">>, Data),
+  Timestamp = mondemand_statsmsg:timestamp (StatsMsg),
   DateTime = mondemand_server_util:epoch_to_mdyhms (Timestamp),
 
-  Num = dict:fetch (<<"num">>, Data),
-  ProgId = dict:fetch (<<"prog_id">>, Data),
-  {Host, ContextString} =
-    mondemand_server_util:construct_context_string (Event, Delimiter),
+  % here's the name of the program which originated the metric
+  ProgId = mondemand_statsmsg:prog_id (StatsMsg),
+
+  Host = mondemand_statsmsg:host (StatsMsg),
+  Context = mondemand_statsmsg:context (StatsMsg),
+  Metrics = mondemand_statsmsg:metrics (StatsMsg),
+  ContextString =
+    mondemand_server_util:construct_context_string (Context, "=", Delimiter),
 
   mondemand_server_stats:increment_backend (?MODULE, events_processed),
 
   TotalProcessed =
     lists:foldl (
       fun (E, A) ->
-        K = dict:fetch (mondemand_server_util:stat_key (E), Data),
-        V = dict:fetch (mondemand_server_util:stat_val (E), Data),
-        T = dict:fetch (mondemand_server_util:stat_type (E), Data),
-
-        RawLogLine = io_lib:format ("~s\t~s\t~s\t~p\t~s\n",
-          [ mondemand_server_util:mdyhms_to_log_string (DateTime),
-            binary_to_list (T),
-            binary_to_list (K),
-            V,
-            ContextString]),
+        {T, K, V} = mondemand_statsmsg:metric (E),
+        RawLogLines =
+          case T of
+            statset ->
+              [
+                format_line (DateTime, ProgId, ST, K, SV, ContextString)
+                || {ST,SV}
+                <- mondemand_statsmsg:statset_to_list (V)
+              ];
+            _ ->
+              [ format_line (DateTime, ProgId, T, K, V, ContextString) ]
+          end,
 
         RawDir =
           filename:join (
@@ -106,12 +116,12 @@ handle_cast ({process, Binary},
         ok = mondemand_server_util:mkdir_p (RawDir),
         RawFileName = filename:join ([RawDir, Host]),
         {ok, RawFile} = file:open (RawFileName, [append]),
-        io:format (RawFile, "~s",[RawLogLine]),
+        [ io:format (RawFile, "~s",[RawLogLine]) || RawLogLine <- RawLogLines ],
         ok = file:close (RawFile),
         A + 1
       end,
       0,
-      lists:seq (1,Num)
+      Metrics
     ),
 
   mondemand_server_stats:increment_backend
@@ -136,3 +146,13 @@ code_change (_OldVsn, State, _Extra) ->
 %%====================================================================
 %% Internal
 %%====================================================================
+%%
+format_line (DateTime, ProgId, T, K, V, ContextString) ->
+  io_lib:format ("~s\t~s\t~s\t~s\t~p\t~s\n",
+    [ mondemand_server_util:mdyhms_to_log_string (DateTime),
+      ProgId,
+      mondemand_util:stringify (T),
+      mondemand_util:stringify (K),
+      V,
+      ContextString]).
+

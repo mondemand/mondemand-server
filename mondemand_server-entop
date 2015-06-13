@@ -1,0 +1,4 @@
+#!/bin/sh
+
+host=`hostname`
+entop md_server@$host -name entop -setcookie md_server

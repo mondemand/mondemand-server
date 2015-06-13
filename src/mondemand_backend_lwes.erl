@@ -51,7 +51,7 @@ init (Config) ->
 
   case lwes:open (emitters, LwesConfig) of
     {ok, Channels} ->
-      mondemand_server_stats:init_backend (?MODULE, events_processed),
+      mondemand_server_stats:create_backend (?MODULE, events_processed),
       {ok, #state { config = LwesConfig,
                     channels = Channels,
                     extra_context = ExtraContext }
@@ -71,28 +71,41 @@ handle_cast ({process, {udp,_Port,_SenderIp,_SenderPort,Event}},
   ChannelsOut = lwes:emit (ChannelsIn, Event),
   mondemand_server_stats:increment_backend (?MODULE, events_processed),
   { noreply, State#state { channels = ChannelsOut } };
-handle_cast ({process, UDP = {udp,_Port,_SenderIp,_SenderPort,Packet}},
+handle_cast ({process, UDP},
              State = #state { channels = ChannelsIn,
                               extra_context = ExtraContext}) ->
+
   ChannelsOutFinal =
-    case lwes_event:peek_name_from_udp (UDP) of
-      { error, _ } ->
+    case mondemand_event:peek_type_from_udp (UDP) of
+      undefined ->
         mondemand_server_stats:increment_backend (?MODULE, send_errors),
         error_logger:error_msg ("Bad event ~p",[UDP]),
         ChannelsIn;
-      <<"MonDemand::StatsMsg">> -> % FIXME: replace with constant?
-        Event = mondemand_server_stats_helper:to_lwes (
-                  mondemand_server_stats_helper:add_contexts (
-                    mondemand_server_stats_helper:from_lwes (Packet),
-                    ExtraContext)
-                ),
-        ChannelsOut = lwes:emit (ChannelsIn, Event),
+      stats_msg ->
+        Event = mondemand_event:from_udp (UDP),
+        NewEvent = mondemand_event:to_lwes (
+                     mondemand_event:set_msg (Event,
+                       mondemand_statsmsg:add_contexts (
+                         mondemand_event:msg (Event),
+                         ExtraContext
+                       )
+                     )
+                   ),
+        ChannelsOut = lwes:emit (ChannelsIn, NewEvent),
         mondemand_server_stats:increment_backend (?MODULE, events_processed),
         ChannelsOut;
       _ ->
-        ChannelsOut = lwes:emit (ChannelsIn, Packet),
-        mondemand_server_stats:increment_backend (?MODULE, events_processed),
-        ChannelsOut
+        case UDP of
+          {udp,_,_,_,Packet} ->
+            ChannelsOut = lwes:emit (ChannelsIn, Packet),
+            mondemand_server_stats:increment_backend
+              (?MODULE, events_processed),
+            ChannelsOut;
+          _ ->
+            mondemand_server_stats:increment_backend (?MODULE, send_errors),
+            error_logger:error_msg ("Bad event ~p",[UDP]),
+            ChannelsIn
+        end
     end,
 
   { noreply, State#state { channels = ChannelsOutFinal } };

@@ -32,9 +32,9 @@ stats () ->
 %%====================================================================
 init([Dispatch, Num]) ->
   ok = gproc_pool:new (mondemand_dispatcher),
-  mondemand_server_stats:init (events_received),
-  mondemand_server_stats:init (events_dispatched),
-  mondemand_server_stats:init (dispatcher_errors),
+  mondemand_server_stats:create (events_received),
+  mondemand_server_stats:create (events_dispatched),
+  mondemand_server_stats:create (dispatcher_errors),
   { ok,
     {
       {one_for_one, 10, 10},

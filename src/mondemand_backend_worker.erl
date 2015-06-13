@@ -2,6 +2,8 @@
 
 -behaviour (gen_server).
 
+-include_lib ("mondemand/include/mondemand.hrl").
+
 %% API
 -export ([start_link/4]).
 
@@ -25,10 +27,10 @@ behaviour_info(_) ->
   undefined.
 
 -record (state, {
-                  name,
                   handler_mod,
-                  worker,
-                  worker_mod
+                  worker_name,
+                  worker_mod,
+                  worker_state
                 }).
 
 start_link (SupervisorName, WorkerAtom, WorkerName, WorkerModule) ->
@@ -40,17 +42,18 @@ start_link (SupervisorName, WorkerAtom, WorkerName, WorkerModule) ->
 %% gen_server callbacks
 %%====================================================================
 init ([SupervisorName, WorkerName, WorkerModule]) ->
+  error_logger:info_msg("~p:init([~p,~p,~p])",[?MODULE,SupervisorName, WorkerName, WorkerModule]),
   % ensure terminate is called
   process_flag( trap_exit, true ),
 
   % init stats
-  mondemand_server_stats:init_backend (WorkerModule, events_processed),
-  mondemand_server_stats:init_backend (WorkerModule, stats_sent_count),
-  mondemand_server_stats:init_backend (WorkerModule, stats_dropped_count),
-  mondemand_server_stats:init_backend (WorkerModule, stats_process_millis),
-  mondemand_server_stats:init_backend (WorkerModule, stats_send_millis),
-  mondemand_server_stats:init_backend (WorkerModule, connection_errors),
-  mondemand_server_stats:init_backend (WorkerModule, send_errors),
+  mondemand_server_stats:create_backend (WorkerModule, events_processed),
+  mondemand_server_stats:create_backend (WorkerModule, stats_sent_count),
+  mondemand_server_stats:create_backend (WorkerModule, stats_dropped_count),
+  mondemand_server_stats:create_backend (WorkerModule, stats_process_millis),
+  mondemand_server_stats:create_backend (WorkerModule, stats_send_millis),
+  mondemand_server_stats:create_backend (WorkerModule, connection_errors),
+  mondemand_server_stats:create_backend (WorkerModule, send_errors),
 
   % config is grabbed from the server
   Config = mondemand_server_config:backend_config (WorkerModule),
@@ -63,10 +66,13 @@ init ([SupervisorName, WorkerName, WorkerModule]) ->
     {error, E} ->
       {stop, {error, E} };
     WorkerState ->
-      {ok, #state { name = WorkerName,
-                    handler_mod = HandlerMod,
-                    worker = WorkerState,
-                    worker_mod = WorkerMod }}
+      {ok, #state {
+             handler_mod = HandlerMod,
+             worker_name = WorkerName,
+             worker_mod = WorkerMod,
+             worker_state = WorkerState
+          }
+      }
   end.
 
 handle_call (Request, From, State) ->
@@ -74,52 +80,40 @@ handle_call (Request, From, State) ->
                             [?MODULE, Request, From]),
   { reply, ok, State }.
 
-handle_cast ({process, Binary},
+handle_cast ({process, UDP = {udp,_,_,_,_}},
+             State) ->
+  Event = mondemand_event:from_udp (UDP),
+  handle_cast ({process, Event}, State);
+handle_cast ({process, Event = #md_event {}},
              State = #state { handler_mod = HandlerMod,
-                              worker = Worker,
+                              worker_state = Worker,
                               worker_mod = WorkerModule
                             }) ->
   PreProcess = os:timestamp (),
-  {NumBad, NumGood, Lines} =
-    mondemand_backend_stats_formatter:process_event (undefined,
-                                                     Binary, HandlerMod),
+  % if the handler_mod is undefined, just pass through the event unchanged
+  {NumGood, Data} =
+    case HandlerMod of
+      undefined ->
+        {1, Event};
+      _ ->
+        {NumBad, G, Lines} =
+          mondemand_backend_stats_formatter:process_event (undefined,
+                                                           Event, HandlerMod),
+        mondemand_server_stats:increment_backend
+          (WorkerModule, stats_dropped_count, NumBad),
+        {G, Lines}
+    end,
   PostProcess = os:timestamp (),
   ProcessMillis =
     webmachine_util:now_diff_milliseconds (PostProcess, PreProcess),
-
   mondemand_server_stats:increment_backend
     (WorkerModule, stats_process_millis, ProcessMillis),
+
   mondemand_server_stats:increment_backend (WorkerModule, events_processed),
 
-  SendStart = os:timestamp (),
-  case WorkerModule:send (Worker, Lines) of
-    ok ->
-      SendFinish = os:timestamp (),
-      SendMillis =
-        webmachine_util:now_diff_milliseconds (SendFinish, SendStart),
+  send_data (WorkerModule, Worker, NumGood, Data),
 
-      mondemand_server_stats:increment_backend
-        (WorkerModule, stats_send_millis, SendMillis),
-      mondemand_server_stats:increment_backend
-        (WorkerModule, stats_dropped_count, NumBad),
-      mondemand_server_stats:increment_backend
-        (WorkerModule, stats_sent_count, NumGood),
-
-      { noreply, State };
-    error ->
-      SendFinish = os:timestamp (),
-      SendMillis =
-        webmachine_util:now_diff_milliseconds (SendFinish, SendStart),
-
-      mondemand_server_stats:increment_backend
-        (WorkerModule, stats_send_millis, SendMillis),
-      mondemand_server_stats:increment_backend
-        (WorkerModule, stats_dropped_count, NumBad + NumGood),
-      mondemand_server_stats:increment_backend
-        (WorkerModule, send_errors),
-
-      { noreply, State }
-  end;
+  { noreply, State };
 handle_cast (Request, State) ->
   error_logger:warning_msg ("~p : Unrecognized cast ~p~n",[?MODULE, Request]),
   { noreply, State }.
@@ -128,11 +122,30 @@ handle_info (Request, State) ->
   error_logger:warning_msg ("~p : Unrecognized info ~p~n",[?MODULE, Request]),
   { noreply, State }.
 
-terminate (_Reason, #state { worker = Worker,
+terminate (_Reason, #state { worker_state = Worker,
                              worker_mod = WorkerMod }) ->
   WorkerMod:destroy (Worker),
   ok.
 
 code_change (_OldVsn, State, _Extra) ->
   {ok, State}.
+
+
+send_data (WorkerModule, Worker, NumData, Data) ->
+  SendStart = os:timestamp (),
+  case WorkerModule:send (Worker, Data) of
+    ok ->
+      mondemand_server_stats:increment_backend
+        (WorkerModule, stats_sent_count, NumData);
+    error ->
+      mondemand_server_stats:increment_backend
+        (WorkerModule, stats_dropped_count, NumData),
+      mondemand_server_stats:increment_backend
+        (WorkerModule, send_errors)
+  end,
+  SendFinish = os:timestamp (),
+  SendMillis = webmachine_util:now_diff_milliseconds (SendFinish, SendStart),
+  mondemand_server_stats:increment_backend
+    (WorkerModule, stats_send_millis, SendMillis),
+  ok.
 
