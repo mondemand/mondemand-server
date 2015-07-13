@@ -1,4 +1,4 @@
--module (mondemand_backend_lwes).
+-module (mondemand_backend_lwes_global).
 
 -include_lib ("lwes/include/lwes.hrl").
 -include_lib ("kernel/include/file.hrl").
@@ -87,14 +87,14 @@ handle_cast ({process, UDP},
         Context = mondemand_statsmsg:context (StatsMsg),
         ProgId = mondemand_statsmsg:prog_id (StatsMsg),
 
-        % for the moment filter out aggregate's and the 
-        % the mondemand-server stats as those shouldn't be forwarded
+        % for the moment filter out anything not an aggregate
+        % or not from the mondemand-server
         ShouldSend =
           case lists:keyfind (<<"stat">>, 1, Context) of
             {_,_} ->
-              false;
+              true;
             false ->
-              ProgId =/= <<"mondemand_server">>
+              ProgId =:= <<"mondemand_server">>
           end,
 
         NewEvent =
