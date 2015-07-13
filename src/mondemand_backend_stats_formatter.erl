@@ -9,8 +9,19 @@ process_event (Prefix, Event, HandlerMod) ->
   % grab out the statsmsg
   StatsMsg = mondemand_event:msg (Event),
 
-  % here's the timestamp (in seconds)
-  Timestamp = trunc ( mondemand_statsmsg:timestamp (StatsMsg) / 1000),
+  % calculate timestamps for different metrics
+  CollectTime =
+    case mondemand_statsmsg:collect_time (StatsMsg) of
+      undefined -> mondemand_event:receipt_time (Event);
+      CT -> CT
+    end,
+  CollectTimestamp = trunc ( CollectTime / 1000),
+  SendTime =
+     case mondemand_statsmsg:send_time (StatsMsg) of
+       undefined -> mondemand_event:receipt_time (Event);
+       ST -> ST
+     end,
+  SendTimestamp = trunc ( SendTime / 1000),
 
   % here's the name of the program which originated the metric
   ProgId = mondemand_statsmsg:prog_id (StatsMsg),
@@ -25,6 +36,13 @@ process_event (Prefix, Event, HandlerMod) ->
     lists:foldl (
       fun (E, { Errors, Okay, Current, List } ) ->
         { MetricType, MetricName, MetricValue } = mondemand_statsmsg:metric (E),
+
+        Timestamp =
+          case MetricType of
+            statset -> CollectTimestamp;
+            _ -> SendTimestamp
+          end,
+
         case HandlerMod:format_stat (Current, Num, Prefix, ProgId, Host,
                                      MetricType, MetricName, MetricValue,
                                      Timestamp, Context)

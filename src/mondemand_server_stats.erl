@@ -56,10 +56,8 @@ increment_backend (Backend, Metric, Value) ->
   mondemand:increment (prog_id(), Metric, Value, [{backend, Backend}]).
 
 flush () ->
-  error_logger:info_msg ("flushing local stats"),
   mondemand_statdb:flush (1,
     fun (StatsMsg) ->
-      error_logger:info_msg ("flushing ~p",[StatsMsg]),
       Event = mondemand_event:new ("127.0.0.1", 0, 0,?MD_STATS_EVENT,StatsMsg),
       mondemand_server_dispatcher_sup:dispatch (Event)
     end

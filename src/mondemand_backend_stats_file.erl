@@ -78,8 +78,14 @@ handle_cast ({process, Event = #md_event {}},
                             }) ->
   StatsMsg = mondemand_event:msg (Event),
 
-  Timestamp = mondemand_statsmsg:timestamp (StatsMsg),
-  DateTime = mondemand_server_util:epoch_to_mdyhms (Timestamp),
+  CollectTime =
+    mondemand_server_util:epoch_to_mdyhms (
+      mondemand_statsmsg:collect_time (StatsMsg)
+    ),
+  SendTime =
+    mondemand_server_util:epoch_to_mdyhms (
+      mondemand_statsmsg:send_time (StatsMsg)
+    ),
 
   % here's the name of the program which originated the metric
   ProgId = mondemand_statsmsg:prog_id (StatsMsg),
@@ -96,16 +102,21 @@ handle_cast ({process, Event = #md_event {}},
     lists:foldl (
       fun (E, A) ->
         {T, K, V} = mondemand_statsmsg:metric (E),
+        DateTime =
+          case T of
+            statset -> CollectTime;
+            _ -> SendTime
+          end,
         RawLogLines =
           case T of
             statset ->
               [
-                format_line (DateTime, ProgId, ST, K, SV, ContextString)
+                format_line (DateTime, Host, ProgId, ST, K, SV, ContextString)
                 || {ST,SV}
                 <- mondemand_statsmsg:statset_to_list (V)
               ];
             _ ->
-              [ format_line (DateTime, ProgId, T, K, V, ContextString) ]
+              [ format_line (DateTime, Host, ProgId, T, K, V, ContextString) ]
           end,
 
         RawDir =
@@ -147,9 +158,10 @@ code_change (_OldVsn, State, _Extra) ->
 %% Internal
 %%====================================================================
 %%
-format_line (DateTime, ProgId, T, K, V, ContextString) ->
-  io_lib:format ("~s\t~s\t~s\t~s\t~p\t~s\n",
+format_line (DateTime, Host, ProgId, T, K, V, ContextString) ->
+  io_lib:format ("~s\t~s\t~s\t~s\t~s\t~p\t~s\n",
     [ mondemand_server_util:mdyhms_to_log_string (DateTime),
+      Host,
       ProgId,
       mondemand_util:stringify (T),
       mondemand_util:stringify (K),

@@ -1,14 +1,55 @@
 #!/bin/sh
 
+config=$1
+
+if test "x$config" = "x" ; then
+  config="dev"
+fi
+
 deps=
 for d in deps/* ; do
   deps="$deps -pa $d/ebin"
 done
-exec erl \
-  -name md_server -setcookie md_server \
+
+#cwd=`pwd`
+#pidfile="tmp/var/run/mondemand/rrdcached.pid"
+#
+#getPid() {
+#  pid=`cat $pidfile`
+#}
+#
+#startRRDCached() {
+#  mkdir -p tmp/logs
+#  touch tmp/logs/rrdcached.log
+#  rrdcached -b $cwd -l 127.0.0.1 -s apache -f 7200 -w 3600 -p tmp/var/run/mondemand/rrdcached.pid -l unix:tmp/var/run/mondemand/rrdcached.sock -g 2>&1 >> tmp/logs/rrdcached.log &
+#}
+#
+#if test -f $pidfile ; then
+#  getPid
+#  kill -0 $pid > /dev/null 2>&1
+#  if test $? = 0 ; then
+#    echo "rrdcached already running at $pid"
+#  else
+#    startRRDCached
+#  fi
+#else
+#  startRRDCached
+#fi
+#
+#sleep 2
+
+erl \
+  -name md_server_$config -setcookie md_server \
   $deps \
   -pa ebin \
-  -config mondemand_server.config \
-  -config mondemand_server_dev.config \
-  -s reloader \
-  -s mondemand_server_app
+  -config mondemand_server_$config.config \
+  -eval "[ application:start(A) || A <- [syntax_tools, compiler, goldrush, lager ]], reloader:start(), mondemand_server_app:start()."
+#  -s reloader \
+# -s mondemand_server_app
+
+#num_running=`ps auwwx | grep beam | grep md_server | grep -v grep | wc -l`
+#if test $num_running -eq 0 -a -f $pidfile ; then
+#  getPid
+#  kill $pid
+#  rm -f $pidfile
+#fi
