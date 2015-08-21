@@ -58,7 +58,10 @@ increment_backend (Backend, Metric, Value) ->
 flush () ->
   mondemand_statdb:flush (1,
     fun (StatsMsg) ->
-      Event = mondemand_event:new ("127.0.0.1", 0, 0,?MD_STATS_EVENT,StatsMsg),
+      Event = mondemand_event:new (
+                "127.0.0.1", 0,
+                mondemand_util:millis_since_epoch(),
+                ?MD_STATS_EVENT,StatsMsg),
       mondemand_server_dispatcher_sup:dispatch (Event)
     end
   ).

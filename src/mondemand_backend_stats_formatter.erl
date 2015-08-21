@@ -80,6 +80,6 @@ process_event (Prefix, Event, HandlerMod) ->
     true ->
       { NumBad, NumGood, [ HandlerMod:header(), Entries, HandlerMod:footer() ] };
     false ->
-      error_logger:error_msg ("No Good Data ~p",[Event]),
+%      error_logger:error_msg ("No Good Data ~p",[Event]),
       { NumBad, NumGood, [] }
   end.

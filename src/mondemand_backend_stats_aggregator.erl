@@ -80,7 +80,7 @@ send (#state {aggregation_keys = AggKeys}, Data) ->
   case mondemand_event:sender_port (Data) of
     0 ->
       % got aggregated value from self
-      ok;
+      error;
     _ ->
       % not a self sent event so need to aggregate
       StatsMsg = mondemand_event:msg (Data),
@@ -130,7 +130,7 @@ send (#state {aggregation_keys = AggKeys}, Data) ->
                                 {<<"stat">>,ST} | Context],
                                SV);
                            ({ST, SV}) ->
-                             mondemand:add_sample (
+                             true = mondemand:add_sample (
                                ProgId, K,
                                [{<<"host">>, <<"all">>},
                                 {<<"stat">>,ST} | Context],
@@ -139,7 +139,7 @@ send (#state {aggregation_keys = AggKeys}, Data) ->
                          mondemand_statsmsg:statset_to_list (V));
             Stat ->
               % counters and gauges just get added as straight samples
-              mondemand:add_sample (ProgId, K,
+              true = mondemand:add_sample (ProgId, K,
                                     [{<<"host">>, <<"all">>},
                                      {<<"stat">>, Stat} | Context],
                                     V)
