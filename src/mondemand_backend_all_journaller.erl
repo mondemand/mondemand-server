@@ -53,7 +53,7 @@ init (Config) ->
   {ok, Journal} = lwes_journaller:start_link (NewConfig),
 
   % initialize all stats to zero
-  mondemand_server_stats:init_backend (?MODULE, events_processed),
+  mondemand_server_stats:create_backend (?MODULE, events_processed),
 
   {ok, #state { config = NewConfig, journal = Journal }}.
 
@@ -63,7 +63,9 @@ handle_call (Request, From, State) ->
   { reply, ok, State }.
 
 handle_cast ({process, Event}, #state { journal = Journal }) ->
-  JournalOut = lwes_journaller:process_event (Event, Journal),
+  JournalOut = lwes_journaller:process_event (
+                 mondemand_event:to_udp (Event),
+                 Journal),
   mondemand_server_stats:increment_backend (?MODULE, events_processed),
   {noreply, #state { journal = JournalOut }};
 

@@ -60,6 +60,13 @@ init([]) ->
       { one_for_one, 10, 10 },
       BackendConfigs ++ WebConfig ++
       [
+        { mondemand_server_stats,
+          { mondemand_server_stats, start_link, [] },
+          permanent,
+          2000,
+          worker,
+          [ mondemand_server_stats ]
+        },
         {
           mondemand_server_dispatcher_sup,
           { mondemand_server_dispatcher_sup, start_link,

@@ -12,6 +12,7 @@
           mkdir_p/1,
           construct_context/1,
           construct_context_string/2,
+          construct_context_string/3,
           join/2,
           stat_key/1,
           stat_val/1,
@@ -33,6 +34,10 @@ seconds_since_epoch () ->
   {Mega, Secs, _ } = os:timestamp(),
   Mega * 1000000 + Secs.
 
+epoch_to_mdyhms(undefined) ->
+  calendar:now_to_universal_time (os:timestamp());
+epoch_to_mdyhms(Time = {_, _, _}) ->
+  calendar:now_to_universal_time (Time);
 epoch_to_mdyhms(MilliSeconds) ->
   calendar:now_to_universal_time (
     {MilliSeconds div 1000000000,
@@ -94,6 +99,14 @@ construct_context_string (Event, Delimiter) ->
                   {"unknown",[]}, Context),
   ContextString = join (C1, Delimiter),
   {Host, ContextString}.
+
+construct_context_string (Context, InnerDelimiter, OuterDelimiter) ->
+  join (lists:map (fun ({K,V}) -> [mondemand_util:stringify (K),
+                                   InnerDelimiter,
+                                   mondemand_util:stringify (V)
+                                  ]
+                   end, Context),
+        OuterDelimiter).
 
 join (L,S) when is_list (L) ->
   lists:reverse (join (L, S, [])).

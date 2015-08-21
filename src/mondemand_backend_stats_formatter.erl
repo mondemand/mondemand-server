@@ -1,45 +1,58 @@
 -module (mondemand_backend_stats_formatter).
 
 -include_lib ("lwes/include/lwes.hrl").
+-include_lib ("mondemand/include/mondemand.hrl").
 
 -export ([process_event/3]).
 
-process_event (Prefix, Binary, HandlerMod) ->
-  % deserialize the event as a dictionary
-  Event =  lwes_event:from_udp_packet (Binary, dict),
+process_event (Prefix, Event, HandlerMod) ->
+  % grab out the statsmsg
+  StatsMsg = mondemand_event:msg (Event),
 
-  % grab out the attributes
-  #lwes_event { attrs = Data } = Event,
-
-  % here's the timestamp
-  Timestamp = trunc (dict:fetch (<<"ReceiptTime">>, Data) / 1000),
+  % calculate timestamps for different metrics
+  CollectTime =
+    case mondemand_statsmsg:collect_time (StatsMsg) of
+      undefined -> mondemand_event:receipt_time (Event);
+      CT -> CT
+    end,
+  CollectTimestamp = trunc ( CollectTime / 1000),
+  SendTime =
+     case mondemand_statsmsg:send_time (StatsMsg) of
+       undefined -> mondemand_event:receipt_time (Event);
+       ST -> ST
+     end,
+  SendTimestamp = trunc ( SendTime / 1000),
 
   % here's the name of the program which originated the metric
-  ProgId = dict:fetch (<<"prog_id">>, Data),
+  ProgId = mondemand_statsmsg:prog_id (StatsMsg),
 
-  ContextWithHost = mondemand_server_util:construct_context (Event),
+  Host = mondemand_statsmsg:host (StatsMsg),
+  Context = mondemand_statsmsg:context (StatsMsg),
+  Metrics = mondemand_statsmsg:metrics (StatsMsg),
 
-  % here's the host, and the rest of the context as a proplist
-  {SenderHost, Context} =
-    case lists:keytake (<<"host">>, 1, ContextWithHost) of
-      false -> {"unknown", ContextWithHost};
-      {value, {<<"host">>, Host}, ContextOut} -> {Host, ContextOut}
-    end,
-
-  Num = dict:fetch (<<"num">>, Data),
+  Num = mondemand_statsmsg:num_metrics (StatsMsg),
   Separator = HandlerMod:separator(),
   { NumBad, NumGood, _, Entries } =
     lists:foldl (
       fun (E, { Errors, Okay, Current, List } ) ->
-        MetricType = dict:fetch (mondemand_server_util:stat_type (E), Data),
-        MetricName = dict:fetch (mondemand_server_util:stat_key (E), Data),
-        MetricValue = dict:fetch (mondemand_server_util:stat_val (E), Data),
-        case HandlerMod:format_stat (Current, Num, Prefix, ProgId, SenderHost,
+        { MetricType, MetricName, MetricValue } = mondemand_statsmsg:metric (E),
+
+        Timestamp =
+          case MetricType of
+            statset -> CollectTimestamp;
+            _ -> SendTimestamp
+          end,
+
+        case HandlerMod:format_stat (Current, Num, Prefix, ProgId, Host,
                                      MetricType, MetricName, MetricValue,
                                      Timestamp, Context)
         of
           error ->
-            error_logger:error_msg ("Bad Data in format Prefix=~p,ProgId=~p,SenderHost=~p,MetricType=~p,MetricName=~p,MetricValue=~p,Timestamp=~p,Context=~p",[Prefix, ProgId, SenderHost, MetricType, MetricName, MetricValue, Timestamp, Context]),
+            error_logger:error_msg (
+                "Bad Data in format Prefix=~p,ProgId=~p,SenderHost=~p,"
+                "MetricType=~p,MetricName=~p,MetricValue=~p,Timestamp=~p,"
+                "Context=~p",[Prefix, ProgId, Host, MetricType,
+                              MetricName, MetricValue, Timestamp, Context]),
             % if not on the last one, just keep going
             case Current =/= Num of
               true -> { Errors + 1, Okay, Current + 1, List };
@@ -61,12 +74,12 @@ process_event (Prefix, Binary, HandlerMod) ->
         end
       end,
       { 0, 0, 1, [] },
-      lists:seq (1, Num)
+      Metrics
     ),
   case NumGood > 0 of
     true ->
       { NumBad, NumGood, [ HandlerMod:header(), Entries, HandlerMod:footer() ] };
     false ->
-      error_logger:error_msg ("No Good Data ~p",[Event]),
+%      error_logger:error_msg ("No Good Data ~p",[Event]),
       { NumBad, NumGood, [] }
   end.

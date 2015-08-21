@@ -1,3 +1,10 @@
+* Thu Aug 20 2015 Anthony Molinaro <anthonym@alumni.caltech.edu> 2.1.1
+- minor fixes
+
+* Mon Jul 13 2015 Anthony Molinaro <anthonym@alumni.caltech.edu> 2.1.0
+- added aggregation
+- added two types of forwarding
+
 * Wed Apr 01 2015 Anthony Molinaro <anthonym@alumni.caltech.edu> 2.0.0
 - Breaking Change : modified mondemand_server_stats_handler to pass the index
 and total to the format stat call

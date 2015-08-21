@@ -56,8 +56,8 @@ init (Config) ->
   mondemand_server_util:mkdir_p (Dir),
 
   % initialize all stats to zero
-  mondemand_server_stats:init_backend (?MODULE, events_processed),
-  mondemand_server_stats:init_backend (?MODULE, send_errors),
+  mondemand_server_stats:create_backend (?MODULE, events_processed),
+  mondemand_server_stats:create_backend (?MODULE, send_errors),
 
   { ok, #state {
           config = Config,

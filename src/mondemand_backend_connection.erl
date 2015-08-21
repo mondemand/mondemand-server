@@ -2,6 +2,8 @@
 
 -behaviour (gen_server).
 
+-include_lib ("mondemand/include/mondemand.hrl").
+
 %% API
 -export ([start_link/4]).
 
@@ -38,13 +40,13 @@ init ([SupervisorName, WorkerName, WorkerModule]) ->
   process_flag( trap_exit, true ),
 
   % init stats
-  mondemand_server_stats:init_backend (WorkerModule, events_processed),
-  mondemand_server_stats:init_backend (WorkerModule, stats_sent_count),
-  mondemand_server_stats:init_backend (WorkerModule, stats_dropped_count),
-  mondemand_server_stats:init_backend (WorkerModule, stats_process_millis),
-  mondemand_server_stats:init_backend (WorkerModule, stats_send_millis),
-  mondemand_server_stats:init_backend (WorkerModule, connection_errors),
-  mondemand_server_stats:init_backend (WorkerModule, send_errors),
+  mondemand_server_stats:create_backend (WorkerModule, events_processed),
+  mondemand_server_stats:create_backend (WorkerModule, stats_sent_count),
+  mondemand_server_stats:create_backend (WorkerModule, stats_dropped_count),
+  mondemand_server_stats:create_backend (WorkerModule, stats_process_millis),
+  mondemand_server_stats:create_backend (WorkerModule, stats_send_millis),
+  mondemand_server_stats:create_backend (WorkerModule, connection_errors),
+  mondemand_server_stats:create_backend (WorkerModule, send_errors),
 
   % config is grabbed from the server
   Config = mondemand_server_config:backend_config (WorkerModule),
@@ -82,17 +84,23 @@ handle_call (Request, From, State) ->
 % when we don't have a connection we don't want keep trying the backend
 % thus the reconnecting logic, so we still process the event to figure
 % out how many we are dropping then just increment a counter
-handle_cast ({process, Binary},
+%
+handle_cast ({process, UDP = {udp,_,_,_,_}},
+             State) ->
+  Event = mondemand_event:from_udp (UDP),
+  handle_cast ({process, Event}, State);
+handle_cast ({process, Event},
              State = #state { transport = Transport,
                               transport_mod = TransportMod,
                               worker_mod = WorkerModule,
                               prefix = Prefix,
                               handler_mod = HandlerMod
+%                             , response_state = PreviousResponseState
                             }) ->
   PreProcess = os:timestamp (),
   {NumBad, NumGood, Lines} =
     mondemand_backend_stats_formatter:process_event (Prefix,
-                                                     Binary, HandlerMod),
+                                                     Event, HandlerMod),
   PostProcess = os:timestamp (),
   ProcessMillis =
     webmachine_util:now_diff_milliseconds (PostProcess, PreProcess),
@@ -110,6 +118,7 @@ handle_cast ({process, Binary},
     true ->
       SendStart = os:timestamp (),
       case TransportMod:send (Transport, Lines) of
+%        {{ok,R}, NewTransport} ->
         {ok, NewTransport} ->
           SendFinish = os:timestamp (),
           SendMillis =
@@ -123,6 +132,22 @@ handle_cast ({process, Binary},
             (WorkerModule, stats_sent_count, NumGood),
 
           { noreply, State#state { transport = NewTransport } };
+%          NewResponseState =
+%            case R of
+%              undefined -> PreviousResponseState;
+%              _ ->
+%                { Errors, NResponseState } =
+%                  HandlerMod:handle_response (R,
+%                                              PreviousResponseState),
+%                mondemand_server_stats:increment_backend
+%                  (WorkerModule, stats_dropped_count, Errors),
+%                mondemand_server_stats:increment_backend
+%                  (WorkerModule, stats_sent_count, -Errors),
+%                NResponseState
+%            end,
+%
+%          { noreply, State#state { transport = NewTransport,
+%                                   response_state = NewResponseState } };
         {_, NewTransport} ->
           SendFinish = os:timestamp (),
           SendMillis =

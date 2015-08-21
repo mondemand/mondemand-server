@@ -18,7 +18,7 @@
          ]).
 
 -record (state, { listeners }).
--record (listener_state, { }).
+-record (listener_state, {}).
 
 %%====================================================================
 %% API
@@ -27,7 +27,13 @@ start_link () ->
   gen_server:start_link ( { local, ?MODULE }, ?MODULE, [], []).
 
 process_event (Event, State) ->
-  mondemand_server_dispatcher_sup:dispatch (Event),
+  % just ignore errors, so the whole server doesn't crash
+  try mondemand_server_dispatcher_sup:dispatch (Event) of
+    _ -> ok
+  catch
+    E1:E2 ->
+      error_logger:error_msg ("Error dispatching : ~p:~p",[E1,E2])
+  end,
   State.
 
 %%====================================================================
@@ -50,15 +56,18 @@ init ([]) ->
   end.
 
 handle_call (Request, From, State) ->
-  error_logger:warning_msg ("Unrecognized call ~p from ~p~n",[Request, From]),
+  error_logger:warning_msg ("~p : Unrecognized call ~p from ~p~n",
+                            [?MODULE, Request, From]),
   { reply, ok, State }.
 
 handle_cast (Request, State) ->
-  error_logger:warning_msg ("Unrecognized cast ~p~n",[Request]),
+  error_logger:warning_msg ("~p : Unrecognized cast ~p~n",
+                            [?MODULE, Request]),
   { noreply, State }.
 
 handle_info (Request, State) ->
-  error_logger:warning_msg ("Unrecognized info ~p~n",[Request]),
+  error_logger:warning_msg ("~p : Unrecognized info ~p~n",
+                            [?MODULE, Request]),
   {noreply, State}.
 
 terminate (_Reason, #state { listeners = Channels }) ->

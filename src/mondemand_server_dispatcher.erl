@@ -1,5 +1,7 @@
 -module (mondemand_server_dispatcher).
 
+-include_lib ("mondemand/include/mondemand.hrl").
+
 -behaviour (gen_server).
 
 %% gen_server callbacks
@@ -65,7 +67,7 @@ dispatch_one (Event, Dispatch) ->
   mondemand_server_stats:increment (events_received),
 
   % call handlers for each event type
-  case lwes_event:peek_name_from_udp (Event) of
+  case mondemand_event:peek_name_from_udp (Event) of
     { error, _ } ->
       mondemand_server_stats:increment (dispatcher_errors),
       error_logger:error_msg ("Bad event ~p",[Event]);
@@ -74,13 +76,13 @@ dispatch_one (Event, Dispatch) ->
       % the handlers for that name
       case dict:find (EventName, Dispatch) of
         {ok, V} ->
-          [ M:process(Event) || M <- V ],
+          [ M:process (Event) || M <- V ],
           mondemand_server_stats:increment (events_dispatched);
         error ->
           % if we don't find the name, we send through any "*" handlers
           case dict:find ("*", Dispatch) of
             {ok, DV} ->
-              [ M:process(Event) || M <- DV ],
+              [ M:process (Event) || M <- DV ],
               mondemand_server_stats:increment (events_dispatched);
             error ->
               mondemand_server_stats:increment (dispatcher_errors),
