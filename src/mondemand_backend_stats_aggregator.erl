@@ -49,6 +49,13 @@ init ([Config]) ->
    {
       {one_for_one, 10, 10},
       [
+        { mondemand_backend_stats_aggregator_db,
+          { mondemand_backend_stats_aggregator_db, start_link, [] },
+          permanent,
+          2000,
+          worker,
+          [ mondemand_backend_stats_aggregator_db ]
+        },
         { ?POOL,
          { mondemand_backend_worker_pool_sup, start_link,
            [ ?POOL,
@@ -137,11 +144,27 @@ send (#state {aggregation_keys = AggKeys}, Data) ->
                                SV)
                          end,
                          mondemand_statsmsg:statset_to_list (V));
-            Stat ->
-              % counters and gauges just get added as straight samples
+            counter ->
+              % counters are turned into gauges then added, this means
+              % there's one minute missing in some cases
+              Host = mondemand_statsmsg:host (StatsMsg),
+              mondemand_backend_stats_aggregator_db:insert (
+                  {Host, ProgId, K, Context},
+                  V),
+              NewV = mondemand_backend_stats_aggregator_db:current (
+                       {Host, ProgId, K, Context}
+                     ),
+              % FIXME: hardcoded rate?
+              NewRate = trunc (NewV / 60),
+              true = mondemand:add_sample (ProgId, K,
+                                           [{<<"host">>, <<"all">>},
+                                            {<<"stat">>, gauge} | Context],
+                                           NewRate);
+            gauge ->
+              % gauges just get added as straight samples
               true = mondemand:add_sample (ProgId, K,
                                     [{<<"host">>, <<"all">>},
-                                     {<<"stat">>, Stat} | Context],
+                                     {<<"stat">>, gauge} | Context],
                                     V)
           end
         end,

@@ -1,3 +1,6 @@
+* Mon Sep 14 2015 Anthony Molianro <anthonym@alumni.caltech.edu> 2.2.0
+- aggregations are now all gauges which is better when samples come in late
+
 * Thu Aug 20 2015 Anthony Molinaro <anthonym@alumni.caltech.edu> 2.1.1
 - minor fixes
 
