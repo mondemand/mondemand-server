@@ -30,7 +30,8 @@ behaviour_info(_) ->
                   handler_mod,
                   worker_name,
                   worker_mod,
-                  worker_state
+                  worker_state,
+                  prefix
                 }).
 
 start_link (SupervisorName, WorkerAtom, WorkerName, WorkerModule) ->
@@ -60,6 +61,7 @@ init ([SupervisorName, WorkerName, WorkerModule]) ->
 
   HandlerMod = proplists:get_value (handler_mod, Config, undefined),
   WorkerMod = proplists:get_value (worker_mod, Config, undefined),
+  Prefix = proplists:get_value (prefix, Config, undefined),
 
   gproc_pool:connect_worker (SupervisorName, WorkerName),
   case WorkerMod:create (Config) of
@@ -70,7 +72,8 @@ init ([SupervisorName, WorkerName, WorkerModule]) ->
              handler_mod = HandlerMod,
              worker_name = WorkerName,
              worker_mod = WorkerMod,
-             worker_state = WorkerState
+             worker_state = WorkerState,
+             prefix = Prefix
           }
       }
   end.
@@ -87,7 +90,8 @@ handle_cast ({process, UDP = {udp,_,_,_,_}},
 handle_cast ({process, Event = #md_event {}},
              State = #state { handler_mod = HandlerMod,
                               worker_state = Worker,
-                              worker_mod = WorkerModule
+                              worker_mod = WorkerModule,
+                              prefix = Prefix
                             }) ->
   PreProcess = os:timestamp (),
   % if the handler_mod is undefined, just pass through the event unchanged
@@ -97,7 +101,7 @@ handle_cast ({process, Event = #md_event {}},
         {1, Event};
       _ ->
         {NumBad, G, Lines} =
-          mondemand_backend_stats_formatter:process_event (undefined,
+          mondemand_backend_stats_formatter:process_event (Prefix,
                                                            Event, HandlerMod),
         mondemand_server_stats:increment_backend
           (WorkerModule, stats_dropped_count, NumBad),
@@ -148,4 +152,3 @@ send_data (WorkerModule, Worker, NumData, Data) ->
   mondemand_server_stats:increment_backend
     (WorkerModule, stats_send_millis, SendMillis),
   ok.
-
