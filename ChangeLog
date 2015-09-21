@@ -1,5 +1,8 @@
 * Mon Sep 14 2015 Anthony Molianro <anthonym@alumni.caltech.edu> 2.2.0
 - aggregations are now all gauges which is better when samples come in late
+- separator/header/footer callbacks can return undefined and will be skipped
+in formatted output
+- pass prefix through to backend workers
 
 * Thu Aug 20 2015 Anthony Molinaro <anthonym@alumni.caltech.edu> 2.1.1
 - minor fixes
