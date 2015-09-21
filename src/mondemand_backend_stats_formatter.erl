@@ -59,17 +59,21 @@ process_event (Prefix, Event, HandlerMod) ->
               false ->
                 % otherwise we need to remove the trailing separator
                 Rest =
-                  case List of
-                    [] -> [];  % an error at the beginning can result in an
+                  case {Separator =/= undefined, List} of
+                    {_, []} -> [];  % an error at the beginning can result in an
                                % empty list
-                    [ Separator | R ] -> R
+                    {true, [ Separator | R ]} -> R;
+                    {_, R} -> R
                   end,
                 { Errors + 1, Okay, Current + 1, Rest }
             end;
           Other ->
-            case Current =/= Num of
-              true -> { Errors, Okay + 1, Current + 1, [Separator, Other | List] };
-              false -> { Errors, Okay + 1, Current + 1, [Other | List ] }
+            case {Separator =/= undefined, Current =/= Num} of
+              {true, true} ->
+                { Errors, Okay + 1, Current + 1, [Separator, Other | List] };
+              {false, true} ->
+                { Errors, Okay + 1, Current + 1, [ Other | List ] };
+              {_, false} -> { Errors, Okay + 1, Current + 1, [Other | List ] }
             end
         end
       end,
@@ -78,8 +82,21 @@ process_event (Prefix, Event, HandlerMod) ->
     ),
   case NumGood > 0 of
     true ->
-      { NumBad, NumGood, [ HandlerMod:header(), Entries, HandlerMod:footer() ] };
+      Header = HandlerMod:header(),
+      Footer = HandlerMod:footer(),
+      case {Header =/= undefined, Footer =/= undefined} of
+        {true, true} ->
+          { NumBad, NumGood,
+           [ HandlerMod:header(), Entries, HandlerMod:footer() ] };
+        {true, false} ->
+          { NumBad, NumGood,
+           [ HandlerMod:header(), Entries ] };
+        {false, true} ->
+          { NumBad, NumGood,
+           [ Entries, HandlerMod:footer() ] };
+        {false, false} ->
+          { NumBad, NumGood, Entries }
+      end;
     false ->
-%      error_logger:error_msg ("No Good Data ~p",[Event]),
       { NumBad, NumGood, [] }
   end.
