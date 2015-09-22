@@ -1,3 +1,7 @@
+* Tue Sep 22 2015 Anthony Molianro <anthonym@alumni.caltech.edu> 3.0.0
+- backend_workers now work in a similar fashion to the backend transport, in
+that they can reconnect.  This broke the callbacks for backend_workers
+
 * Mon Sep 14 2015 Anthony Molianro <anthonym@alumni.caltech.edu> 2.2.0
 - aggregations are now all gauges which is better when samples come in late
 - separator/header/footer callbacks can return undefined and will be skipped

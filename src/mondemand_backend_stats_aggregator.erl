@@ -6,8 +6,11 @@
 
 %% mondemand_backend_worker callbacks
 -export ([ create/1,
+           connected/1,
+           connect/1,
            send/2,
-           destroy/1 ]).
+           destroy/1
+         ]).
 
 %% mondemand_server_backend callbacks
 -export ([ start_link/1,
@@ -78,16 +81,22 @@ init ([Config]) ->
 %%====================================================================
 create (Config) ->
   AggKeys = proplists:get_value (aggregation_keys, Config, undefined),
-  #state {aggregation_keys = AggKeys}.
+  {ok, #state {aggregation_keys = AggKeys}}.
+
+connected (_State) ->
+  true. % always connected
+
+connect (State) ->
+  {ok, State}.
 
 % aggregation is currently always by host, and optionally by other keys.
 % host should be normalized by just leaving it in the context which would
 % simplify much of the logic below.
-send (#state {aggregation_keys = AggKeys}, Data) ->
+send (State = #state {aggregation_keys = AggKeys}, Data) ->
   case mondemand_event:sender_port (Data) of
     0 ->
       % got aggregated value from self
-      error;
+      { ok, State };
     _ ->
       % not a self sent event so need to aggregate
       StatsMsg = mondemand_event:msg (Data),
@@ -169,9 +178,9 @@ send (#state {aggregation_keys = AggKeys}, Data) ->
           end
         end,
         Metrics
-      )
-  end,
-  ok.
+      ),
+    { ok, State }
+  end.
 
 destroy (_) ->
   ok.

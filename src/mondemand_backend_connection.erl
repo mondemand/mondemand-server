@@ -95,7 +95,6 @@ handle_cast ({process, Event},
                               worker_mod = WorkerModule,
                               prefix = Prefix,
                               handler_mod = HandlerMod
-%                             , response_state = PreviousResponseState
                             }) ->
   PreProcess = os:timestamp (),
   {NumBad, NumGood, Lines} =
@@ -118,7 +117,6 @@ handle_cast ({process, Event},
     true ->
       SendStart = os:timestamp (),
       case TransportMod:send (Transport, Lines) of
-%        {{ok,R}, NewTransport} ->
         {ok, NewTransport} ->
           SendFinish = os:timestamp (),
           SendMillis =
@@ -132,22 +130,6 @@ handle_cast ({process, Event},
             (WorkerModule, stats_sent_count, NumGood),
 
           { noreply, State#state { transport = NewTransport } };
-%          NewResponseState =
-%            case R of
-%              undefined -> PreviousResponseState;
-%              _ ->
-%                { Errors, NResponseState } =
-%                  HandlerMod:handle_response (R,
-%                                              PreviousResponseState),
-%                mondemand_server_stats:increment_backend
-%                  (WorkerModule, stats_dropped_count, Errors),
-%                mondemand_server_stats:increment_backend
-%                  (WorkerModule, stats_sent_count, -Errors),
-%                NResponseState
-%            end,
-%
-%          { noreply, State#state { transport = NewTransport,
-%                                   response_state = NewResponseState } };
         {_, NewTransport} ->
           SendFinish = os:timestamp (),
           SendMillis =
