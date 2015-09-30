@@ -82,7 +82,8 @@ code_change (_OldVsn, State, _Extra) ->
 %%====================================================================
 open_lwes_channel (LwesConfig) ->
   {ok, Channel} = lwes:open (listener, LwesConfig),
-  ok = lwes:listen (Channel, fun process_event/2, raw, #listener_state{ }).
+  ok = lwes:listen (Channel, fun process_event/2, raw, #listener_state{ }),
+  Channel.
 
 %%====================================================================
 %% Test functions
