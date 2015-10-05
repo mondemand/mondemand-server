@@ -163,12 +163,13 @@ send (State = #state {aggregation_keys = AggKeys}, Data) ->
               NewV = mondemand_backend_stats_aggregator_db:current (
                        {Host, ProgId, K, Context}
                      ),
-              % FIXME: hardcoded rate?
-              NewRate = trunc (NewV / 60),
+              % TODO: should really keep track of times here, and calculate
+              %       the derivative, then multiple to get a more correct
+              %       value
               true = mondemand:add_sample (ProgId, K,
                                            [{<<"host">>, <<"all">>},
                                             {<<"stat">>, gauge} | Context],
-                                           NewRate);
+                                           NewV);
             gauge ->
               % gauges just get added as straight samples
               true = mondemand:add_sample (ProgId, K,

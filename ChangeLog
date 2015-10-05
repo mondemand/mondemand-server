@@ -1,3 +1,7 @@
+* Mon Oct 05 2015 Anthony Molianro <anthonym@alumni.caltech.edu> 3.0.3
+- don't store rates, just store the count for the interval, it will make more
+sense to the user
+
 * Sun Oct 04 2015 Anthony Molianro <anthonym@alumni.caltech.edu> 3.0.2
 - don't allow events with more than 1024 keys to attempt to be sent
 
