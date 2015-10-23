@@ -43,38 +43,16 @@ process_event (Prefix, Event, HandlerMod) ->
             _ -> SendTimestamp
           end,
 
-        case HandlerMod:format_stat (Current, Num, Prefix, ProgId, Host,
-                                     MetricType, MetricName, MetricValue,
-                                     Timestamp, Context)
-        of
-          error ->
-            error_logger:error_msg (
-                "Bad Data in format Prefix=~p,ProgId=~p,SenderHost=~p,"
-                "MetricType=~p,MetricName=~p,MetricValue=~p,Timestamp=~p,"
-                "Context=~p",[Prefix, ProgId, Host, MetricType,
-                              MetricName, MetricValue, Timestamp, Context]),
-            % if not on the last one, just keep going
-            case Current =/= Num of
-              true -> { Errors + 1, Okay, Current + 1, List };
-              false ->
-                % otherwise we need to remove the trailing separator
-                Rest =
-                  case {Separator =/= undefined, List} of
-                    {_, []} -> [];  % an error at the beginning can result in an
-                               % empty list
-                    {true, [ Separator | R ]} -> R;
-                    {_, R} -> R
-                  end,
-                { Errors + 1, Okay, Current + 1, Rest }
-            end;
-          Other ->
-            case {Separator =/= undefined, Current =/= Num} of
-              {true, true} ->
-                { Errors, Okay + 1, Current + 1, [Separator, Other | List] };
-              {false, true} ->
-                { Errors, Okay + 1, Current + 1, [ Other | List ] };
-              {_, false} -> { Errors, Okay + 1, Current + 1, [Other | List ] }
-            end
+        {ok, Other, NG, NB} =
+          HandlerMod:format_stat (Current, Num, Prefix, ProgId, Host,
+                                  MetricType, MetricName, MetricValue,
+                                  Timestamp, Context),
+        case {Separator =/= undefined, Current =/= Num} of
+          {true, true} ->
+            { Errors + NB, Okay + NG, Current + 1, [Separator, Other | List] };
+          {false, true} ->
+            { Errors + NB, Okay + NG, Current + 1, [ Other | List ] };
+          {_, false} -> { Errors + NB, Okay + NG, Current + 1, [Other | List ] }
         end
       end,
       { 0, 0, 1, [] },
@@ -85,17 +63,10 @@ process_event (Prefix, Event, HandlerMod) ->
       Header = HandlerMod:header(),
       Footer = HandlerMod:footer(),
       case {Header =/= undefined, Footer =/= undefined} of
-        {true, true} ->
-          { NumBad, NumGood,
-           [ HandlerMod:header(), Entries, HandlerMod:footer() ] };
-        {true, false} ->
-          { NumBad, NumGood,
-           [ HandlerMod:header(), Entries ] };
-        {false, true} ->
-          { NumBad, NumGood,
-           [ Entries, HandlerMod:footer() ] };
-        {false, false} ->
-          { NumBad, NumGood, Entries }
+        {true, true} -> { NumBad, NumGood, [ Header, Entries, Footer ] };
+        {true, false} -> { NumBad, NumGood, [ Header, Entries ] };
+        {false, true} -> { NumBad, NumGood, [ Entries, Footer ] };
+        {false, false} -> { NumBad, NumGood, Entries }
       end;
     false ->
       { NumBad, NumGood, [] }
