@@ -1,3 +1,9 @@
+* Fri Oct 23 2015 Anthony Molinaro <anthonym@alumni.caltech.edu> 4.0.0
+- breaking change for formatters, now they should return
+{ok, ResultList, NumGood, NumBad }
+- lwes forwarding now doesn't deserialize and reserialze if there's no extra
+context
+
 * Mon Oct 05 2015 Anthony Molianro <anthonym@alumni.caltech.edu> 3.0.3
 - don't store rates, just store the count for the interval, it will make more
 sense to the user

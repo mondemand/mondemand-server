@@ -82,46 +82,37 @@ handle_cast ({process, UDP},
         error_logger:error_msg ("Bad event ~p",[UDP]),
         ChannelsIn;
       stats_msg ->
-        Event = mondemand_event:from_udp (UDP),
-        StatsMsg = mondemand_event:msg (Event),
-        Context = mondemand_statsmsg:context (StatsMsg),
-        ProgId = mondemand_statsmsg:prog_id (StatsMsg),
-
-        % for the moment filter out aggregate's and the 
-        % the mondemand-server stats as those shouldn't be forwarded
-        ShouldSend =
-          case lists:keyfind (<<"stat">>, 1, Context) of
-            {_,_} ->
-              false;
-            false ->
-              ProgId =/= <<"mondemand_server">>
-          end,
-
-        NewEvent =
-          case ShouldSend of
-            true ->
-              mondemand_event:to_lwes (
-                mondemand_event:set_msg (Event,
-                  mondemand_statsmsg:add_contexts (
-                    StatsMsg,
-                    ExtraContext
-                  )
-                )
-              );
-            false ->
-              undefined
-          end,
-
-        % only send if we have an event to send
-        case NewEvent of
-          undefined ->
+        % we need special processing for internally generated versus normal
+        % stats events
+        case UDP of
+          {udp,_,_,_,Packet} ->
+            case ExtraContext of
+              E when E =:= []; E =:= undefined -> 
+                % no context defined, so just forward  it
+                mondemand_server_stats:increment_backend (?MODULE, events_processed),
+                lwes:emit (ChannelsIn, Packet);
+              _ ->
+                % otherwise we need to add extra context before forwarding
+                Event = mondemand_event:from_udp (UDP),
+                StatsMsg = mondemand_event:msg (Event),
+                NewEvent =
+                  mondemand_event:to_lwes (
+                    mondemand_event:set_msg (Event,
+                      mondemand_statsmsg:add_contexts (
+                        StatsMsg,
+                        ExtraContext
+                      )
+                    )
+                  ),
+                mondemand_server_stats:increment_backend (?MODULE, events_processed),
+                lwes:emit (ChannelsIn, NewEvent)
+            end;
+          _ ->
+            % internal events (ie, aggregates and mondemand server stats) will
+            % be filtered out by this logic
             mondemand_server_stats:increment_backend (?MODULE, events_processed),
             mondemand_server_stats:increment_backend (?MODULE, events_filtered),
-            ChannelsIn;
-          _ ->
-            ChannelsOut = lwes:emit (ChannelsIn, NewEvent),
-            mondemand_server_stats:increment_backend (?MODULE, events_processed),
-            ChannelsOut
+            ChannelsIn
         end;
       _ ->
         case UDP of
