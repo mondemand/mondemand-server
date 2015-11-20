@@ -3,8 +3,17 @@
 -include_lib ("lwes/include/lwes.hrl").
 -include_lib ("kernel/include/file.hrl").
 
+-behaviour (supervisor).
 -behaviour (mondemand_server_backend).
--behaviour (gen_server).
+-behaviour (mondemand_backend_worker).
+
+%% mondemand_backend_worker callbacks
+-export ([ create/1,
+           connected/1,
+           connect/1,
+           send/2,
+           destroy/1
+         ]).
 
 %% mondemand_backend callbacks
 -export ([ start_link/1,
@@ -13,15 +22,10 @@
            type/0
          ]).
 
-%% gen_server callbacks
--export ([ init/1,
-           handle_call/3,
-           handle_cast/2,
-           handle_info/2,
-           terminate/2,
-           code_change/3
-         ]).
+%% supervisor callbacks
+-export ([ init/1 ]).
 
+-define (POOL, md_backend_lwes_pool).
 -record (state, { config,
                   channels,
                   extra_context
@@ -31,21 +35,50 @@
 %% mondemand_backend callbacks
 %%====================================================================
 start_link (Config) ->
-  gen_server:start_link ( { local, ?MODULE }, ?MODULE, Config, []).
+  supervisor:start_link ( { local, ?MODULE }, ?MODULE, [Config]).
 
 process (Event) ->
-  gen_server:cast (?MODULE, {process, Event}).
+  mondemand_backend_worker_pool_sup:process (?POOL, Event).
 
 required_apps () ->
   [ lwes ].
 
 type () ->
-  worker.
+  supervisor.
 
 %%====================================================================
-%% gen_server callbacks
+% supervisor callbacks
 %%====================================================================
-init (Config) ->
+init ([Config]) ->
+  % default to one process per scheduler
+  Number =
+    proplists:get_value (number, Config, erlang:system_info(schedulers)),
+
+  { ok,
+   {
+      {one_for_one, 10, 10},
+      [
+        { ?POOL,
+         { mondemand_backend_worker_pool_sup, start_link,
+           [ ?POOL,
+             mondemand_backend_worker,
+             Number,
+             ?MODULE
+           ]
+         },
+         permanent,
+         2000,
+         supervisor,
+         [ ]
+        }
+      ]
+    }
+  }.
+
+%%====================================================================
+%% mondemand_backend_worker callbacks
+%%====================================================================
+create (Config) ->
   LwesConfig = proplists:get_value (lwes, Config, undefined),
   ExtraContext = proplists:get_value (extra_context, Config, []),
 
@@ -60,20 +93,22 @@ init (Config) ->
       {stop, {error, E}}
   end.
 
-handle_call (Request, From, State) ->
-  error_logger:warning_msg ("~p : Unrecognized call ~p from ~p~n",
-                            [?MODULE, Request, From]),
-  { reply, ok, State }.
+connected (_State) ->
+  true. % always connected
 
-handle_cast ({process, {udp,_Port,_SenderIp,_SenderPort,Event}},
-             State = #state { channels = ChannelsIn,
-                              extra_context = undefined }) ->
+connect (State) ->
+  {ok, State}.
+
+send (State = #state { channels = ChannelsIn,
+                       extra_context = undefined },
+      {udp,_,_,_,Event}) ->
   ChannelsOut = lwes:emit (ChannelsIn, Event),
   mondemand_server_stats:increment_backend (?MODULE, events_processed),
   { noreply, State#state { channels = ChannelsOut } };
-handle_cast ({process, UDP},
-             State = #state { channels = ChannelsIn,
-                              extra_context = ExtraContext}) ->
+
+send (State = #state { channels = ChannelsIn,
+                       extra_context = ExtraContext},
+      UDP) ->
 
   ChannelsOutFinal =
     case mondemand_event:peek_type_from_udp (UDP) of
@@ -130,20 +165,10 @@ handle_cast ({process, UDP},
 
   { noreply, State#state { channels = ChannelsOutFinal } };
 
-handle_cast (Request, State) ->
-  error_logger:warning_msg ("~p : Unrecognized cast ~p~n",[?MODULE, Request]),
-  { noreply, State }.
-
-handle_info (Request, State) ->
+send (State, Request) ->
   error_logger:warning_msg ("~p : Unrecognized info ~p~n",[?MODULE, Request]),
   { noreply, State }.
 
-terminate (_Reason, _State) ->
+destroy (_) ->
   ok.
 
-code_change (_OldVsn, State, _Extra) ->
-  { ok, State }.
-
-%%====================================================================
-%% Internal
-%%====================================================================
