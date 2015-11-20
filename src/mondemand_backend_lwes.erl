@@ -2,6 +2,7 @@
 
 -include_lib ("lwes/include/lwes.hrl").
 -include_lib ("kernel/include/file.hrl").
+-include_lib ("mondemand/include/mondemand.hrl").
 
 -behaviour (supervisor).
 -behaviour (mondemand_server_backend).
@@ -100,67 +101,45 @@ connect (State) ->
   {ok, State}.
 
 send (State = #state { channels = ChannelsIn,
-                       extra_context = undefined },
-      {udp,_,_,_,Event}) ->
-  ChannelsOut = lwes:emit (ChannelsIn, Event),
+                       extra_context = ExtraContext },
+      Event = #md_event {} ) 
+      when ExtraContext =:= []; ExtraContext =:= undefined ->
+
+  ChannelsOut = lwes:emit (ChannelsIn, mondemand_event:to_lwes(Event)),
   mondemand_server_stats:increment_backend (?MODULE, events_processed),
   { noreply, State#state { channels = ChannelsOut } };
 
 send (State = #state { channels = ChannelsIn,
                        extra_context = ExtraContext},
-      UDP) ->
+      Event = #md_event {} ) ->
 
   ChannelsOutFinal =
-    case mondemand_event:peek_type_from_udp (UDP) of
+    case mondemand_event:peek_type_from_udp (Event) of
       undefined ->
         mondemand_server_stats:increment_backend (?MODULE, send_errors),
-        error_logger:error_msg ("Bad event ~p",[UDP]),
+        error_logger:error_msg ("Bad event ~p",[Event]),
         ChannelsIn;
       stats_msg ->
         % we need special processing for internally generated versus normal
         % stats events
-        case UDP of
-          {udp,_,_,_,Packet} ->
-            case ExtraContext of
-              E when E =:= []; E =:= undefined -> 
-                % no context defined, so just forward  it
-                mondemand_server_stats:increment_backend (?MODULE, events_processed),
-                lwes:emit (ChannelsIn, Packet);
-              _ ->
-                % otherwise we need to add extra context before forwarding
-                Event = mondemand_event:from_udp (UDP),
-                StatsMsg = mondemand_event:msg (Event),
-                NewEvent =
-                  mondemand_event:to_lwes (
-                    mondemand_event:set_msg (Event,
-                      mondemand_statsmsg:add_contexts (
-                        StatsMsg,
-                        ExtraContext
-                      )
-                    )
-                  ),
-                mondemand_server_stats:increment_backend (?MODULE, events_processed),
-                lwes:emit (ChannelsIn, NewEvent)
-            end;
-          _ ->
-            % internal events (ie, aggregates and mondemand server stats) will
-            % be filtered out by this logic
-            mondemand_server_stats:increment_backend (?MODULE, events_processed),
-            mondemand_server_stats:increment_backend (?MODULE, events_filtered),
-            ChannelsIn
-        end;
+        %  we need to add extra context before forwarding
+        StatsMsg = mondemand_event:msg (Event),
+        NewEvent =
+          mondemand_event:to_lwes (
+            mondemand_event:set_msg (Event,
+              mondemand_statsmsg:add_contexts (
+                StatsMsg,
+                ExtraContext
+              )
+            )
+          ),
+        mondemand_server_stats:increment_backend (?MODULE, events_processed),
+        lwes:emit (ChannelsIn, NewEvent);
       _ ->
-        case UDP of
-          {udp,_,_,_,Packet} ->
-            ChannelsOut = lwes:emit (ChannelsIn, Packet),
-            mondemand_server_stats:increment_backend
-              (?MODULE, events_processed),
-            ChannelsOut;
-          _ ->
-            mondemand_server_stats:increment_backend (?MODULE, send_errors),
-            error_logger:error_msg ("Bad event ~p",[UDP]),
-            ChannelsIn
-        end
+        ChannelsOut = lwes:emit (ChannelsIn, mondemand_event:to_lwes(Event)),
+        mondemand_server_stats:increment_backend
+          (?MODULE, events_processed),
+        ChannelsOut
     end,
 
   { noreply, State#state { channels = ChannelsOutFinal } };
