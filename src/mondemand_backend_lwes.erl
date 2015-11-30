@@ -102,6 +102,15 @@ connect (State) ->
 
 send (State = #state { channels = ChannelsIn,
                        extra_context = ExtraContext },
+      {udp,_,_,_,Event} ) 
+      when ExtraContext =:= []; ExtraContext =:= undefined ->
+
+  ChannelsOut = lwes:emit (ChannelsIn, Event),
+  mondemand_server_stats:increment_backend (?MODULE, events_processed),
+  { noreply, State#state { channels = ChannelsOut } };
+
+send (State = #state { channels = ChannelsIn,
+                       extra_context = ExtraContext },
       Event = #md_event {} ) 
       when ExtraContext =:= []; ExtraContext =:= undefined ->
 
@@ -111,18 +120,22 @@ send (State = #state { channels = ChannelsIn,
 
 send (State = #state { channels = ChannelsIn,
                        extra_context = ExtraContext},
-      Event = #md_event {} ) ->
+      Data ) ->
 
   ChannelsOutFinal =
-    case mondemand_event:peek_type_from_udp (Event) of
+    case mondemand_event:peek_type_from_udp (Data) of
       undefined ->
         mondemand_server_stats:increment_backend (?MODULE, send_errors),
-        error_logger:error_msg ("Bad event ~p",[Event]),
+        error_logger:error_msg ("Bad event ~p",[Data]),
         ChannelsIn;
       stats_msg ->
         % we need special processing for internally generated versus normal
         % stats events
         %  we need to add extra context before forwarding
+        Event = case Data of
+          #md_event {} -> Data;
+          {udp,_,_,_,_} -> mondemand_event:from_udp(Data)
+        end,
         StatsMsg = mondemand_event:msg (Event),
         NewEvent =
           mondemand_event:to_lwes (
@@ -136,7 +149,11 @@ send (State = #state { channels = ChannelsIn,
         mondemand_server_stats:increment_backend (?MODULE, events_processed),
         lwes:emit (ChannelsIn, NewEvent);
       _ ->
-        ChannelsOut = lwes:emit (ChannelsIn, mondemand_event:to_lwes(Event)),
+        LwesEvent = case Data of
+          #md_event {} -> mondemand_event:to_lwes(Data);
+          {udp,_,_,_,Packet} -> Packet
+        end,
+        ChannelsOut = lwes:emit (ChannelsIn, LwesEvent),
         mondemand_server_stats:increment_backend
           (?MODULE, events_processed),
         ChannelsOut

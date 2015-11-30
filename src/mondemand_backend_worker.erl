@@ -36,7 +36,8 @@ behaviour_info(_) ->
                   handler_mod,
                   reconnect_min,
                   reconnect_max,
-                  reconnect_time = 0
+                  reconnect_time = 0,
+                  pass_raw_data = false
                 }).
 
 start_link (SupervisorName, WorkerAtom, WorkerName, WorkerModule) ->
@@ -68,6 +69,7 @@ init ([SupervisorName, WorkerName, WorkerModule]) ->
   ReconnectMin = proplists:get_value (reconnect_min, Config, 10),
   ReconnectMax = proplists:get_value (reconnect_max, Config, 30000),
   HandlerMod = proplists:get_value (handler_mod, Config, undefined),
+  PassRawData = proplists:get_value (pass_raw_data, Config, false),
 
   case WorkerMod:create (Config) of
     {ok, WorkerState} ->
@@ -79,7 +81,8 @@ init ([SupervisorName, WorkerName, WorkerModule]) ->
                  prefix = Prefix,
                  handler_mod = HandlerMod,
                  reconnect_min = ReconnectMin,
-                 reconnect_max = ReconnectMax
+                 reconnect_max = ReconnectMax,
+                 pass_raw_data = PassRawData
               },
       {ok, try_connect (State) };
     E ->
@@ -91,6 +94,9 @@ handle_call (Request, From, State) ->
                             [?MODULE, Request, From]),
   { reply, ok, State }.
 
+handle_cast ({process, UDP = {udp,_,_,_,_}},
+             State = #state { pass_raw_data = true }) ->
+  send_data (State, 0, 1, UDP);
 handle_cast ({process, UDP = {udp,_,_,_,_}},
              State) ->
   Event = mondemand_event:from_udp (UDP),
