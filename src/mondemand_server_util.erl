@@ -27,7 +27,8 @@
           priority_string/1,
           initialize_stats/1,
           increment_stat/2,
-          increment_stat/3
+          increment_stat/3,
+          for_each_line_in_file/4
         ]).
 
 seconds_since_epoch () ->
@@ -185,3 +186,25 @@ increment_stat (Key, Stats) ->
 
 increment_stat (Key, Amount, Stats) ->
   dict:update_counter (Key, Amount, Stats).
+
+for_each_line_in_file (Name, Proc, Mode, Accum0) ->
+  case file:open (Name, Mode) of
+    {ok, Device} ->
+      for_each_line (Device, Proc, 1, Accum0);
+    {error, E} ->
+      {error, 0, E}
+  end.
+
+for_each_line (Device, Proc, LineNumber, Accum) ->
+  case io:get_line(Device, "") of
+    eof  ->
+      file:close(Device), Accum;
+    Line ->
+      case Proc(Line, Accum) of
+        {error, E} ->
+          file:close (Device),
+          {error, LineNumber, E};
+        NewAccum ->
+          for_each_line (Device, Proc, LineNumber + 1, NewAccum)
+      end
+  end.

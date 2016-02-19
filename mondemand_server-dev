@@ -42,7 +42,7 @@ erl \
   -name md_server_$config -setcookie md_server \
   $deps \
   -pa ebin \
-  -config mondemand_server_$config.config \
+  -config conf/mondemand_server_$config.config \
   -eval "[ application:start(A) || A <- [syntax_tools, compiler, goldrush, lager ]], reloader:start(), mondemand_server_app:start()."
 #  -s reloader \
 # -s mondemand_server_app

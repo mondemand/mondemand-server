@@ -8,7 +8,8 @@
            listener_config/0,
            backend_config/1,
            dispatch_config/0,
-           parse_dispatch/1
+           parse_dispatch/1,
+           mappings_config/0
          ]).
 
 num_dispatchers () ->
@@ -84,6 +85,16 @@ backend_config (BackendModule) ->
 
 dispatch_config () ->
   dict:from_list (dispatch ()).
+
+mappings_config () ->
+  case application:get_env (mondemand_server, mappings) of
+    {ok, C} ->
+      Directory = proplists:get_value (directory, C, "."),
+      ReloadSeconds = proplists:get_value (reload_seconds, C, 60),
+      {Directory, ReloadSeconds};
+    undefined ->
+      undefined
+  end.
 
 %%--------------------------------------------------------------------
 %%% Internal functions

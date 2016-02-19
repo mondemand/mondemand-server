@@ -55,10 +55,25 @@ init([]) ->
         ]
     end,
 
+  MappingsConfig =
+    case mondemand_server_config:mappings_config () of
+      undefined -> [];
+      {Dir, ReloadSecs} ->
+        [
+          { mondemand_server_mappings_db,
+            { mondemand_server_mappings_db, start_link, [Dir, ReloadSecs] },
+            permanent,
+            2000,
+            worker,
+            [ mondemand_server_mappings_db ]
+          }
+        ]
+    end,
+
   ToStart =
     {
       { one_for_one, 10, 10 },
-      BackendConfigs ++ WebConfig ++
+      MappingsConfig ++ BackendConfigs ++ WebConfig ++
       [
         { mondemand_server_stats,
           { mondemand_server_stats, start_link, [] },
