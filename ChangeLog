@@ -1,3 +1,6 @@
+* Mon Mar 21 2016 Anthony Molinaro <anthonym@alumni.caltech.edu> 4.2.1
+- update mondemand dependency for real
+
 * Thu Feb 18 2016 Anthony Molinaro <anthonym@alumni.caltech.edu> 4.2.0
 - added a performance backend which can summarize changes
 - added a mapping db
