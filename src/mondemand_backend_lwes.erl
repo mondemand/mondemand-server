@@ -26,7 +26,7 @@
 %% supervisor callbacks
 -export ([ init/1 ]).
 
--define (POOL, md_backend_lwes_pool).
+-define (POOL, md_be_lwes_pool).
 -record (state, { config,
                   channels,
                   extra_context
@@ -132,10 +132,7 @@ send (State = #state { channels = ChannelsIn,
         % we need special processing for internally generated versus normal
         % stats events
         %  we need to add extra context before forwarding
-        Event = case Data of
-          #md_event {} -> Data;
-          {udp,_,_,_,_} -> mondemand_event:from_udp(Data)
-        end,
+        Event = mondemand_event:from_udp (Data),
         StatsMsg = mondemand_event:msg (Event),
         NewEvent =
           mondemand_event:to_lwes (
