@@ -22,6 +22,9 @@
 %% supervisor callbacks
 -export ([ init/1 ]).
 
+%% API for fixup
+-export ([ to_stats/1 ]).
+
 -define (POOL, md_perf_pool).
 -record (state, { fixup_mod }).
 
@@ -80,7 +83,7 @@ init ([Config]) ->
 %% mondemand_backend_worker callbacks
 %%====================================================================
 create (Config) ->
-  FixupModule = proplists:get_value (fixup_mod, Config, undefined),
+  FixupModule = proplists:get_value (fixup_mod, Config, ?MODULE),
   {ok, #state { fixup_mod = FixupModule }}.
 
 connected (_State) ->
@@ -99,3 +102,19 @@ send (State = #state { fixup_mod = FixupModule }, Data) ->
 
 destroy (_) ->
   ok.
+
+% default for to_stats, can be overriden above
+
+to_stats (PerfMsg) ->
+  Context = mondemand_perfmsg:context (PerfMsg),
+  [ begin
+      ProgId = <<"performance">>,
+      MetricName = mondemand_perfmsg:timing_label(Timing),
+      MetricValue =
+             mondemand_perfmsg:timing_end_time(Timing)
+             - mondemand_perfmsg:timing_start_time(Timing),
+      { ProgId, Context, MetricName, MetricValue }
+    end
+    || Timing
+    <- mondemand_perfmsg:timings (PerfMsg)
+  ].
