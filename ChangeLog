@@ -1,3 +1,6 @@
+* Thu May 19 2016 Anthony Molinaro <anthonym@alumni.caltech.edu> 4.3.1
+- update webmachine version to fix rebar conflict
+
 * Thu May 12 2016 Anthony Molinaro <anthonym@alumni.caltech.edu> 4.3.0
 - Updated mondemand_backend_lwes_global to use a pool
 
