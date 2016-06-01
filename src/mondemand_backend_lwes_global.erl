@@ -147,22 +147,15 @@ send (State = #state { channels = ChannelsIn,
         NewEvent =
           case ShouldSend of
             true ->
-              % TODO: need to split stats events, but there's not too many
-              %       which are bigger at the moment
-              case mondemand_statsmsg:num_metrics (StatsMsg) of
-                Good when Good =< 1024 ->
-                  mondemand_event:to_lwes (
-                    mondemand_event:set_msg (Event,
-                      mondemand_statsmsg:add_contexts (
-                        StatsMsg,
-                        ExtraContext
-                      )
-                    )
-                  );
-                Bad ->
-                  error_logger:error_msg ("Can't send too big ~p keys",[Bad]),
-                  undefined
-              end;
+              % split stats msgs with many metrics into multiple lwes events
+              mondemand_event:to_lwes (
+                mondemand_event:set_msg (Event,
+                  mondemand_statsmsg:add_contexts (
+                    StatsMsg,
+                    ExtraContext
+                  )
+                )
+              );
             false ->
               undefined
           end,
