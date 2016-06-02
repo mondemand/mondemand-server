@@ -1,3 +1,6 @@
+* Thu June 02 2016 Tim Whalen <tim.whalen@openx.com> 4.4.1
+- removed limit on number of metrics per stats message
+
 * Thu May 19 2016 Anthony Molinaro <anthonym@alumni.caltech.edu> 4.4.0
 - including a default to_stats conversion for reference and development
 
