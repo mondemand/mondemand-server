@@ -1,4 +1,7 @@
-* Thu June 02 2016 Tim Whalen <tim.whalen@openx.com> 4.4.1
+* Thu Jun 09 2016 Anthony Molinaro <anthonym@alumni.caltech.edu> 4.4.2
+- updated dependency on mondemand
+
+* Thu Jun 02 2016 Tim Whalen <tim.whalen@openx.com> 4.4.1
 - removed limit on number of metrics per stats message
 
 * Thu May 19 2016 Anthony Molinaro <anthonym@alumni.caltech.edu> 4.4.0
@@ -19,7 +22,7 @@
 
 * Mon Nov 30 2015 Charles Huang <huangc.cd@gmail.com> 4.1.0
 - Enhancing mondemand_backend_lwes to use pool
-- Ehnahcing mondemand_backend_worker to pass raw data by configuration
+- Enhancing mondemand_backend_worker to pass raw data by configuration
 - mondemand_backend_lwes can now handle both raw UDP and md_event
 
 * Fri Oct 23 2015 Anthony Molinaro <anthonym@alumni.caltech.edu> 4.0.0
