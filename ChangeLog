@@ -1,5 +1,8 @@
+* Sat Jun 11 2016 Anthony Molinaro <anthonym@alumni.caltech.edu> 4.4.3
+- updated dependency on mondemand to 6.2.1
+
 * Thu Jun 09 2016 Anthony Molinaro <anthonym@alumni.caltech.edu> 4.4.2
-- updated dependency on mondemand
+- updated dependency on mondemand to 6.2.0
 
 * Thu Jun 02 2016 Tim Whalen <tim.whalen@openx.com> 4.4.1
 - removed limit on number of metrics per stats message
