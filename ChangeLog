@@ -1,3 +1,8 @@
+* Wed Sep 14 2016 Anthony Molinaro <anthonym@alumni.caltech.edu> 5.0.0
+- make trace writer use pool
+- NON-BACKWARD-COMPATIBLE - removed 'stats_' prefix from worker stats as the
+worker now is used for different backends.
+
 * Sat Jun 11 2016 Anthony Molinaro <anthonym@alumni.caltech.edu> 4.4.3
 - updated dependency on mondemand to 6.2.1
 

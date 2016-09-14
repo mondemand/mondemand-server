@@ -2,8 +2,17 @@
 
 -include_lib ("lwes/include/lwes.hrl").
 
+-behaviour (supervisor).
 -behaviour (mondemand_server_backend).
--behaviour (gen_server).
+-behaviour (mondemand_backend_worker).
+
+%% mondemand_backend_worker callbacks
+-export ([ create/1,
+           connected/1,
+           connect/1,
+           send/2,
+           destroy/1
+         ]).
 
 %% mondemand_backend callbacks
 -export ([ start_link/1,
@@ -12,15 +21,10 @@
            type/0
          ]).
 
-%% gen_server callbacks
--export ([ init/1,
-           handle_call/3,
-           handle_cast/2,
-           handle_info/2,
-           terminate/2,
-           code_change/3
-         ]).
+%% supervisor callbacks
+-export ([ init/1 ]).
 
+-define (POOL, md_be_trace_pool).
 -record (state, { config,
                   root,
                   fields
@@ -30,21 +34,50 @@
 %% mondemand_backend callbacks
 %%====================================================================
 start_link (Config) ->
-  gen_server:start_link ( { local, ?MODULE }, ?MODULE, Config, []).
+  supervisor:start_link ( { local, ?MODULE }, ?MODULE, [Config]).
 
 process (Event) ->
-  gen_server:cast (?MODULE, {process, Event}).
+  mondemand_backend_worker_pool_sup:process (?POOL, Event).
 
 required_apps () ->
   [ ].
 
 type () ->
-  worker.
+  supervisor.
 
 %%====================================================================
-%% gen_server callbacks
+% supervisor callbacks
 %%====================================================================
-init (Config) ->
+init ([Config]) ->
+  % default to one process per scheduler
+  Number =
+    proplists:get_value (number, Config, erlang:system_info(schedulers)),
+
+  { ok,
+   {
+      {one_for_one, 10, 10},
+      [
+        { ?POOL,
+         { mondemand_backend_worker_pool_sup, start_link,
+           [ ?POOL,
+             mondemand_backend_worker,
+             Number,
+             ?MODULE
+           ]
+         },
+         permanent,
+         2000,
+         supervisor,
+         [ ]
+        }
+      ]
+    }
+  }.
+
+%%====================================================================
+%% mondemand_backend_worker callbacks
+%%====================================================================
+create (Config) ->
   Dir = proplists:get_value (root, Config, "."),
   Fields =
     lists:map (fun (E) when is_list (E) -> list_to_binary (E) ;
@@ -55,10 +88,6 @@ init (Config) ->
 
   mondemand_server_util:mkdir_p (Dir),
 
-  % initialize all stats to zero
-  mondemand_server_stats:create_backend (?MODULE, events_processed),
-  mondemand_server_stats:create_backend (?MODULE, send_errors),
-
   { ok, #state {
           config = Config,
           root = filename:join (Dir),
@@ -66,19 +95,19 @@ init (Config) ->
         }
   }.
 
-handle_call (Request, From, State) ->
-  error_logger:warning_msg ("~p : Unrecognized call ~p from ~p~n",
-                            [?MODULE, Request, From]),
-  { reply, ok, State }.
+connected (_State) ->
+  true. % always connected
 
-handle_cast ({process, Binary},
-             State = #state { root = Dir,
-                              fields = Fields }) ->
-  Event =  lwes_event:from_udp_packet (Binary, json_eep18),
+connect (State) ->
+  {ok, State}.
 
-  mondemand_server_stats:increment_backend (?MODULE, events_processed),
-
-  case Event of
+send (State = #state { root = Dir,
+                       fields = Fields
+                     },
+      Binary ) ->
+  Event = mondemand_event:from_udp (Binary),
+  Msg = mondemand_event:msg (Event),
+  case Msg of
     {PL} when is_list (PL) ->
       Owner =
         normalize_to_binary (
@@ -99,33 +128,24 @@ handle_cast ({process, Binary},
         {error, E1} ->
           error_logger:error_msg ("got error ~p on mkdir for ~p",
                                   [E1,Event]),
-          mondemand_server_stats:increment_backend (?MODULE, send_errors);
+          {{error,mkdir}, State};
         ok ->
           case attempt_write (Dir, Owner, Id, ReceiptTime, ProgId,
-                              ExtraFields, Event, 0) of
+                              ExtraFields, Msg, 0) of
             ok ->
-              ok;
-            {error, _} ->
-              mondemand_server_stats:increment_backend (?MODULE, send_errors)
+              {ok, State};
+            E = {error, _} ->
+              {E, State}
           end
       end;
-    _ ->
-      mondemand_server_stats:increment_backend (?MODULE, send_errors)
-  end,
-  { noreply, State };
-handle_cast (Request, State) ->
-  error_logger:warning_msg ("~p : Unrecognized cast ~p~n",[?MODULE, Request]),
-  { noreply, State }.
+    Other ->
+      error_logger:error_msg ("got error ~p on deserialize for ~p",
+                              [Other,Event]),
+      {{error,deserialize}, State}
+  end.
 
-handle_info (Request, State) ->
-  error_logger:warning_msg ("~p : Unrecognized info ~p~n",[?MODULE, Request]),
-  { noreply, State }.
-
-terminate (_Reason, _State) ->
+destroy (_) ->
   ok.
-
-code_change (_OldVsn, State, _Extra) ->
-  { ok, State }.
 
 %%====================================================================
 %% Internal
@@ -157,8 +177,9 @@ attempt_write (Dir, Owner, Id, ReceiptTime, ProgId, ExtraFields,
                         list_to_binary (integer_to_list (Num)),
                         ProgId | ExtraFields],
                       <<"-">>)]),
+  Json = lwes_mochijson2:encode (Event),
 
-  case file:open (TraceFile, [raw, write, exclusive]) of
+  case file:write_file (TraceFile, Json, [raw, exclusive]) of
     {error, eexist} ->
       % conflict, so we recurse and try with a larger num
       % FIXME: this ends up being bad if we expect a lot of conflicts, so
@@ -168,17 +189,7 @@ attempt_write (Dir, Owner, Id, ReceiptTime, ProgId, ExtraFields,
       % most of the time there will only be one or two conflicts
       attempt_write (Dir, Owner, Id, ReceiptTime, ProgId, ExtraFields,
                      Event, Num + 1, Max);
-    {ok, Dev} ->
-      case file:write (Dev, lwes_mochijson2:encode (Event)) of
-        { error, E3 } ->
-          file:close (Dev),
-          error_logger:error_msg ("got error ~p on write of ~p",
-                                  [E3,Event]),
-          { error, write_fail };
-        ok ->
-          file:close (Dev),
-          ok
-      end
+    R -> R
   end.
 
 normalize_to_binary (I) when is_integer (I) ->

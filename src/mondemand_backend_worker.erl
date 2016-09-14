@@ -28,8 +28,7 @@ behaviour_info(callbacks) ->
 behaviour_info(_) ->
   undefined.
 
--record (state, {
-                  prefix,
+-record (state, { prefix,
                   worker_name,
                   worker_mod,
                   worker_state,
@@ -54,10 +53,10 @@ init ([SupervisorName, WorkerName, WorkerModule]) ->
 
   % init stats
   mondemand_server_stats:create_backend (WorkerModule, events_processed),
-  mondemand_server_stats:create_backend (WorkerModule, stats_sent_count),
-  mondemand_server_stats:create_backend (WorkerModule, stats_dropped_count),
-  mondemand_server_stats:create_backend (WorkerModule, stats_process_millis),
-  mondemand_server_stats:create_backend (WorkerModule, stats_send_millis),
+  mondemand_server_stats:create_backend (WorkerModule, sent_count),
+  mondemand_server_stats:create_backend (WorkerModule, dropped_count),
+  mondemand_server_stats:create_backend (WorkerModule, process_millis),
+  mondemand_server_stats:create_backend (WorkerModule, send_millis),
   mondemand_server_stats:create_backend (WorkerModule, connection_errors),
   mondemand_server_stats:create_backend (WorkerModule, send_errors),
 
@@ -122,9 +121,7 @@ handle_cast ({process, Event = #md_event {}},
   ProcessMillis =
     webmachine_util:now_diff_milliseconds (PostProcess, PreProcess),
   mondemand_server_stats:increment_backend
-    (WorkerModule, stats_process_millis, ProcessMillis),
-
-  mondemand_server_stats:increment_backend (WorkerModule, events_processed),
+    (WorkerModule, process_millis, ProcessMillis),
 
   send_data (State, NumBad, NumGood, Data);
 handle_cast (Request, State) ->
@@ -148,10 +145,13 @@ code_change (_OldVsn, State, _Extra) ->
 
 send_data (State = #state { worker_mod = WorkerModule, worker_state = Worker},
            NumBad, NumGood, Data) ->
+
+  mondemand_server_stats:increment_backend (WorkerModule, events_processed),
+
   case WorkerModule:connected (Worker) of
     false ->
       mondemand_server_stats:increment_backend
-          (WorkerModule, stats_dropped_count, NumBad + NumGood),
+          (WorkerModule, dropped_count, NumBad + NumGood),
       % Not connected, let the reconnect logic reconnect, just drop for now
       { noreply, State };
     true ->
@@ -163,11 +163,11 @@ send_data (State = #state { worker_mod = WorkerModule, worker_state = Worker},
             webmachine_util:now_diff_milliseconds (SendFinish, SendStart),
 
           mondemand_server_stats:increment_backend
-            (WorkerModule, stats_send_millis, SendMillis),
+            (WorkerModule, send_millis, SendMillis),
           mondemand_server_stats:increment_backend
-            (WorkerModule, stats_dropped_count, NumBad),
+            (WorkerModule, dropped_count, NumBad),
           mondemand_server_stats:increment_backend
-            (WorkerModule, stats_sent_count, NumGood),
+            (WorkerModule, sent_count, NumGood),
 
           { noreply, State#state { worker_state = NewState } };
         {_, NewState} ->
@@ -176,9 +176,9 @@ send_data (State = #state { worker_mod = WorkerModule, worker_state = Worker},
             webmachine_util:now_diff_milliseconds (SendFinish, SendStart),
 
           mondemand_server_stats:increment_backend
-            (WorkerModule, stats_send_millis, SendMillis),
+            (WorkerModule, send_millis, SendMillis),
           mondemand_server_stats:increment_backend
-            (WorkerModule, stats_dropped_count, NumBad + NumGood),
+            (WorkerModule, dropped_count, NumBad + NumGood),
           mondemand_server_stats:increment_backend
             (WorkerModule, send_errors),
 
