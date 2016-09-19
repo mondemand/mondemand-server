@@ -85,7 +85,7 @@ create (Config) ->
 
   case lwes:open (emitters, LwesConfig) of
     {ok, Channels} ->
-      mondemand_server_stats:create_backend (?MODULE, events_processed),
+      mondemand_server_stats:create_backend (?MODULE, events_filtered),
       {ok, #state { config = LwesConfig,
                     channels = Channels,
                     extra_context = ExtraContext }
@@ -102,92 +102,74 @@ connect (State) ->
 
 send (State = #state { channels = ChannelsIn,
                        extra_context = ExtraContext },
-      {udp,_,_,_,Event} ) 
+      {udp,_,_,_,Event} )
       when ExtraContext =:= []; ExtraContext =:= undefined ->
 
   ChannelsOut = lwes:emit (ChannelsIn, Event),
-  mondemand_server_stats:increment_backend (?MODULE, events_processed),
-  { noreply, State#state { channels = ChannelsOut } };
+  { ok, State#state { channels = ChannelsOut } };
 
 send (State = #state { channels = ChannelsIn,
                        extra_context = ExtraContext },
-      Event = #md_event {} ) 
+      Event = #md_event {} )
       when ExtraContext =:= []; ExtraContext =:= undefined ->
 
   ChannelsOut = lwes:emit (ChannelsIn, mondemand_event:to_lwes(Event)),
-  mondemand_server_stats:increment_backend (?MODULE, events_processed),
-  { noreply, State#state { channels = ChannelsOut } };
+  { ok, State#state { channels = ChannelsOut } };
 
 send (State = #state { channels = ChannelsIn,
                        extra_context = ExtraContext},
       Data ) ->
+  case mondemand_event:peek_type_from_udp (Data) of
+    undefined ->
+      error_logger:error_msg ("Bad event ~p",[Data]),
+      {{error, bad_event}, ChannelsIn};
+    stats_msg ->
+      Event = mondemand_event:from_udp (Data),
+      StatsMsg = mondemand_event:msg (Event),
+      Context = mondemand_statsmsg:context (StatsMsg),
+      ProgId = mondemand_statsmsg:prog_id (StatsMsg),
 
-  ChannelsOutFinal =
-    case mondemand_event:peek_type_from_udp (Data) of
-      undefined ->
-        mondemand_server_stats:increment_backend (?MODULE, send_errors),
-        error_logger:error_msg ("Bad event ~p",[Data]),
-        ChannelsIn;
-      stats_msg ->
-        Event = mondemand_event:from_udp (Data),
-        StatsMsg = mondemand_event:msg (Event),
-        Context = mondemand_statsmsg:context (StatsMsg),
-        ProgId = mondemand_statsmsg:prog_id (StatsMsg),
-
-        % for the moment filter out anything not an aggregate
-        % or not from the mondemand-server
-        ShouldSend =
-          case lists:keyfind (<<"stat">>, 1, Context) of
-            {_,_} ->
-              true;
-            false ->
-              ProgId =:= <<"mondemand_server">>
-          end,
-
-        NewEvent =
-          case ShouldSend of
-            true ->
-              % split stats msgs with many metrics into multiple lwes events
-              mondemand_event:to_lwes (
-                mondemand_event:set_msg (Event,
-                  mondemand_statsmsg:add_contexts (
-                    StatsMsg,
-                    ExtraContext
-                  )
-                )
-              );
-            false ->
-              undefined
-          end,
-
-        % only send if we have an event to send
-        case NewEvent of
-          undefined ->
-            mondemand_server_stats:increment_backend (?MODULE, events_processed),
-            mondemand_server_stats:increment_backend (?MODULE, events_filtered),
-            ChannelsIn;
-          _ ->
-            ChannelsOut = lwes:emit (ChannelsIn, NewEvent),
-            mondemand_server_stats:increment_backend (?MODULE, events_processed),
-            ChannelsOut
-        end;
-      _ ->
-        LwesEvent = case Data of
-          #md_event {} -> mondemand_event:to_lwes(Data);
-          {udp,_,_,_,Packet} -> Packet
+      % for the moment filter out anything not an aggregate
+      % or not from the mondemand-server
+      ShouldSend =
+        case lists:keyfind (<<"stat">>, 1, Context) of
+          {_,_} ->
+            true;
+          false ->
+            ProgId =:= <<"mondemand_server">>
         end,
-        ChannelsOut = lwes:emit (ChannelsIn, LwesEvent),
-        mondemand_server_stats:increment_backend
-          (?MODULE, events_processed),
-        ChannelsOut
-    end,
 
-  { noreply, State#state { channels = ChannelsOutFinal } };
+      NewEvent =
+        case ShouldSend of
+          true ->
+            % split stats msgs with many metrics into multiple lwes events
+            mondemand_event:to_lwes (
+              mondemand_event:set_msg (Event,
+                mondemand_statsmsg:add_contexts (
+                  StatsMsg,
+                  ExtraContext
+                )
+              )
+            );
+          false ->
+            undefined
+        end,
 
-send (State, Request) ->
-  error_logger:warning_msg ("~p : Unrecognized info ~p~n",[?MODULE, Request]),
-  { noreply, State }.
+      % only send if we have an event to send
+      case NewEvent of
+        undefined ->
+          mondemand_server_stats:increment_backend (?MODULE, events_filtered),
+          {ok, State};
+        _ ->
+          {ok, State#state { channels = lwes:emit (ChannelsIn, NewEvent) } }
+      end;
+    _ ->
+      LwesEvent = case Data of
+        #md_event {} -> mondemand_event:to_lwes(Data);
+        {udp,_,_,_,Packet} -> Packet
+      end,
+      {ok, State#state { channels = lwes:emit (ChannelsIn, LwesEvent) } }
+  end.
 
 destroy (_) ->
   ok.
-
