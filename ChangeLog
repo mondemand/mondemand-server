@@ -1,3 +1,7 @@
+* Thu Sep 22 2016 Anthony Molinaro <anthonym@alumni.caltech.edu> 5.1.0
+- when forwarding via lwes add the sender ip/sender port and receipt time
+to the outgoing event
+
 * Wed Sep 14 2016 Anthony Molinaro <anthonym@alumni.caltech.edu> 5.0.0
 - make trace writer use pool
 - NON-BACKWARD-COMPATIBLE - removed 'stats_' prefix from worker stats as the
