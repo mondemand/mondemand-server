@@ -12,8 +12,8 @@
 %% API functions
 %%====================================================================
 start () ->
-  Apps = lists:append ( [ [ sasl, lwes, mondemand, crypto, gproc,
-                            afunix, inets, asn1, public_key,
+  Apps = lists:append ( [ [ sasl, lwes, inets, mondemand, crypto, gproc,
+                            afunix, asn1, public_key,
                             ssl, xmerl, compiler, syntax_tools, mochiweb,
                             webmachine ],
                           mondemand_server_config:applications_to_start(),
