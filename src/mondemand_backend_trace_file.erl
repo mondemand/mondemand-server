@@ -194,6 +194,8 @@ attempt_write (Dir, Owner, Id, ReceiptTime, ProgId, ExtraFields,
 
 normalize_to_binary (I) when is_integer (I) ->
   list_to_binary (integer_to_list (I));
+normalize_to_binary (F) when is_float (F) ->
+  list_to_binary (float_to_list (F));
 normalize_to_binary (L) when is_list (L) ->
   list_to_binary (L);
 normalize_to_binary (B) when is_binary (B) ->

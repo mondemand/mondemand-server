@@ -1,3 +1,6 @@
+* Fri Dec 02 2016 Anthony Molinaro <anthonym@alumni.caltech.edu> 5.1.1
+- sending a float for trace id or trace owner would crash the server
+
 * Thu Sep 22 2016 Anthony Molinaro <anthonym@alumni.caltech.edu> 5.1.0
 - when forwarding via lwes add the sender ip/sender port and receipt time
 to the outgoing event
