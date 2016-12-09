@@ -1,3 +1,0 @@
-The mondemand server listens on one or more lwes channels for mondemand events
-then routes those events to different backends.  Included backends mostly
-write to files.  Additional backends are in different repositories.
