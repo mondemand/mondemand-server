@@ -1,3 +1,9 @@
+* Thu Feb 02 2017 Anthony Molinaro <anthonym@alumni.caltech.edu> 5.1.2
+- fix a bug when trace id or trace owner is an atom crashing the server
+- fix a bug when counters which are normally zero transition to non-zero
+for the first time.
+- add a sink backend
+
 * Fri Dec 02 2016 Anthony Molinaro <anthonym@alumni.caltech.edu> 5.1.1
 - sending a float for trace id or trace owner would crash the server
 
