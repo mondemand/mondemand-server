@@ -50,7 +50,9 @@ init (Config) ->
   NewConfig = lists:keystore (root, 1, Config, {root, filename:join (Dir)}),
 
   % open journal file
-  {ok, Journal} = lwes_journaller:start_link (NewConfig),
+  {ok, Journal} =
+    gen_server:start_link ({local, mondemand_journaller},
+                           lwes_journaller, [NewConfig], []),
 
   % initialize all stats to zero
   mondemand_server_stats:create_backend (?MODULE, events_processed),
