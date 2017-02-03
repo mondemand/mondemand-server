@@ -1,4 +1,10 @@
 #!/bin/sh
 
+config=$1
+
+if test "x$config" = "x" ; then
+  config="dev"
+fi
+
 host=`hostname`
-entop md_server@$host -name entop -setcookie md_server
+entop md_server_$config@$host -name entop -setcookie md_server
