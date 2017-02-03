@@ -38,8 +38,8 @@
 -record (state, {}).
 -record (entry, { key,
                   index = 0,
-                  value1 = 0,
-                  value2 = 0
+                  value1 = undefined,
+                  value2 = undefined
                 }).
 
 -define (KEY_INDEX, #entry.key).
@@ -55,7 +55,7 @@
 start_link() ->
   gen_server:start_link ({local, ?MODULE}, ?MODULE, [], []).
 
-insert (Key, Value) ->
+insert (Key, Value) when is_integer (Value) ->
   Idx =
     try ets:update_counter (?TABLE, Key, {?INDEX_INDEX, 1, 1, 0}) of
       I -> I
@@ -69,6 +69,7 @@ insert (Key, Value) ->
 current (Key) ->
   case ets:lookup (?TABLE, Key) of
     [] -> 0;
+    [#entry {value2 = undefined}] -> 0;  % make sure we have at least 2 values
     [#entry {index = I, value1 = V1, value2 = V2}] ->
       PossibleValue =
         case I of
@@ -130,6 +131,24 @@ db_test_ () ->
     fun cleanup/1,
     [
       % check the case where it doesn't exist
+      ?_assertEqual (0, current(foo)),
+      % insert a large value the first time, which often happens with counters
+      % after a restart
+      ?_assertEqual (true, insert(foo, 10000)),
+      % the first value will then be ignored
+      ?_assertEqual (0, current(foo)),
+      % so inserting another slightly larger number will give a difference
+      ?_assertEqual (true, insert(foo, 10005)),
+      ?_assertEqual (5, current(foo)),
+      % and another to see that both directions work
+      ?_assertEqual (true, insert(foo, 10013)),
+      ?_assertEqual (8, current(foo)),
+      % now insert a much smaller number representing a counter reset
+      ?_assertEqual (true, insert(foo, 2)),
+      ?_assertEqual (0, current(foo)),  % we should have a 0 after reset
+      ?_assertEqual (true, insert(foo, 4)),
+      ?_assertEqual (2, current(foo)),
+      ?_assertEqual (true, insert(foo, 4)),
       ?_assertEqual (0, current(foo)),
       % insert a key
       ?_assertEqual (true, insert(foo,0)),
