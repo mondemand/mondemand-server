@@ -192,6 +192,8 @@ attempt_write (Dir, Owner, Id, ReceiptTime, ProgId, ExtraFields,
     R -> R
   end.
 
+normalize_to_binary (A) when is_atom (A) ->
+  atom_to_binary (A, latin1);
 normalize_to_binary (I) when is_integer (I) ->
   list_to_binary (integer_to_list (I));
 normalize_to_binary (F) when is_float (F) ->
