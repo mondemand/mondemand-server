@@ -1,5 +1,24 @@
 -module (mondemand_backend_stats_aggregator_db).
 
+%% For aggregate statistics I want all statistics to represent a count
+%% for a time interval.  In terms of mondemand this means I want to
+%% turn counters into gauges.  In order to do this, I keep track of
+%% two values and use their difference.
+%%
+%% Toward that end I keep an ets table of 4-tuples with entries
+%%
+%%  { key, index, value1, value2 }
+%%
+%% Whenever a value is added it adds it at index + 1 wrapping at 1, so
+%% as values are added the index goes 0, 1, 0, 1, 0, 1, etc.
+%%
+%% Then when the current is asked for it either returns
+%%   value1 - value2
+%% or
+%%   value2 - value1
+%%
+%% A negative value is considered a wrap and reset to 0.
+%%
 -behaviour (gen_server).
 
 %% API
@@ -28,6 +47,7 @@
 -define (VAL1_INDEX, #entry.value1).
 -define (VAL2_INDEX, #entry.value2).
 -define (SIZE, 2).
+-define (TABLE, md_be_agg_c2g).
 
 %-=====================================================================-
 %-                                  API                                -
@@ -37,20 +57,18 @@ start_link() ->
 
 insert (Key, Value) ->
   Idx =
-    try ets:update_counter (md_be_agg_c2g, Key, {?INDEX_INDEX, 1, 1, 0}) of
+    try ets:update_counter (?TABLE, Key, {?INDEX_INDEX, 1, 1, 0}) of
       I -> I
     catch
       error:badarg ->
-        ets:insert_new (md_be_agg_c2g, #entry { key = Key }),
+        ets:insert_new (?TABLE, #entry { key = Key }),
         0
     end,
-  ets:update_element (md_be_agg_c2g, Key, {?VAL1_INDEX + Idx, Value}).
+  ets:update_element (?TABLE, Key, {?VAL1_INDEX + Idx, Value}).
 
 current (Key) ->
-  case ets:lookup (md_be_agg_c2g, Key) of
+  case ets:lookup (?TABLE, Key) of
     [] -> 0;
-    [#entry {value1 = 0}] -> 0;
-    [#entry {value2 = 0}] -> 0;
     [#entry {index = I, value1 = V1, value2 = V2}] ->
       PossibleValue =
         case I of
@@ -67,13 +85,13 @@ current (Key) ->
 %-                        gen_server callbacks                         -
 %-=====================================================================-
 init([]) ->
-  ets:new (md_be_agg_c2g, [ set,
-                            public,
-                            named_table,
-                            {write_concurrency, true},
-                            {read_concurrency, false},
-                            {keypos, ?KEY_INDEX}
-                          ]),
+  ets:new (?TABLE, [ set,
+                     public,
+                     named_table,
+                     {write_concurrency, true},
+                     {read_concurrency, false},
+                     {keypos, ?KEY_INDEX}
+                   ]),
   { ok, #state{} }.
 
 handle_call (_Request, _From, State = #state { }) ->
@@ -90,3 +108,65 @@ terminate (_Reason, _State) ->
 
 code_change (_OldVsn, State, _Extra) ->
   {ok, State}.
+
+%%--------------------------------------------------------------------
+%%% Test functions
+%%--------------------------------------------------------------------
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+
+setup () ->
+  case start_link() of
+    {ok, Pid} -> Pid;
+    {error, {already_started, _}} -> already_started
+  end.
+
+cleanup (already_started) -> ok;
+cleanup (Pid) -> exit (Pid, normal).
+
+db_test_ () ->
+  { setup,
+    fun setup/0,
+    fun cleanup/1,
+    [
+      % check the case where it doesn't exist
+      ?_assertEqual (0, current(foo)),
+      % insert a key
+      ?_assertEqual (true, insert(foo,0)),
+      % check the difference
+      ?_assertEqual (0, current(foo)),
+      % add another
+      ?_assertEqual (true, insert(foo,10)),
+      % check the difference
+      ?_assertEqual (10, current(foo)),
+      % and another
+      ?_assertEqual (true, insert(foo,20)),
+      % check the difference
+      ?_assertEqual (10, current(foo)),
+      % and a zero (so the counter reset case)
+      ?_assertEqual (true, insert(foo,0)),
+      % check the difference
+      ?_assertEqual (0, current(foo))
+    ]
+  }.
+
+gen_server_coverage_test_ () ->
+  [
+    ?_assertEqual ({reply, ok, #state{}}, handle_call(ok, ok, #state{})),
+    ?_assertEqual ({noreply, #state{}}, handle_cast(ok, #state{})),
+    ?_assertEqual ({noreply, #state{}}, handle_info(ok, #state{})),
+    ?_assertEqual (ok, terminate (ok, #state{})),
+    ?_assertEqual ({ok, #state{}}, code_change(ok, #state{}, ok))
+  ].
+
+eunit_converage_test_ () ->
+  { setup,
+    fun setup/0,
+    fun cleanup/1,
+    [
+      ?_assertEqual (already_started, setup()),
+      ?_assertEqual (ok, cleanup(already_started))
+    ]
+  }.
+
+-endif.
