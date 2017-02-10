@@ -55,13 +55,6 @@ init ([Config]) ->
    {
       {one_for_one, 10, 10},
       [
-        { mondemand_backend_performance_db,
-          { mondemand_backend_performance_db, start_link, [] },
-          permanent,
-          2000,
-          worker,
-          [ mondemand_backend_performance_db ]
-        },
         { ?POOL,
          { mondemand_backend_worker_pool_sup, start_link,
            [ ?POOL,
