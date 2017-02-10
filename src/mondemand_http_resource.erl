@@ -29,10 +29,6 @@ finish_request (ReqData, State) ->
 %%---------------------------------
 %%% Internal functions
 %%---------------------------------
-%%--------------------------------------------------------------------
-%%% Test functions
-%%--------------------------------------------------------------------
-
 request_ip (ReqData) -> 
   {ok, Ip} = inet_parse:address (wrq:peer (ReqData)),
   Ip.
@@ -41,6 +37,9 @@ server_port () ->
   proplists:get_value (port,
     mondemand_server_config:web_config()).
 
+%%--------------------------------------------------------------------
+%%% Test functions
+%%--------------------------------------------------------------------
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 
