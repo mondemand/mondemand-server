@@ -1,6 +1,7 @@
 -module (mondemand_server_dispatcher).
 
 -include_lib ("mondemand/include/mondemand.hrl").
+-include ("mondemand_server_internal.hrl").
 
 -behaviour (gen_server).
 
@@ -14,21 +15,20 @@
          ]).
 
 %% API
--export ([start_link/3, dispatch/2]).
+-export ([start_link/2, dispatch/2]).
 
 -record (state, { dispatch, name, events_processed = 0 }).
 
-start_link (Dispatch, WorkerAtom, Name) ->
-  gen_server:start_link ({local, WorkerAtom}, ?MODULE, [Dispatch, Name], []).
+start_link (Name, Dispatch) ->
+  gen_server:start_link ({local, Name}, ?MODULE, [Name, Dispatch], []).
 
-dispatch (Pid, Event) ->
-  gen_server:cast (Pid, {dispatch, Event}).
+dispatch (Name, Event) ->
+  gen_server:cast (Name, {dispatch, Event}).
 
 %%====================================================================
 %% gen_server callbacks
 %%====================================================================
-init ([Dispatch, Name]) ->
-  gproc_pool:connect_worker (mondemand_dispatcher, Name),
+init ([Name, Dispatch]) ->
   {ok, #state { dispatch = Dispatch, name = Name } }.
 
 handle_call ({stats}, _,
@@ -68,26 +68,24 @@ dispatch_one (Event, Dispatch) ->
 
   % call handlers for each event type
   case mondemand_event:peek_name_from_udp (Event) of
-    { error, _ } ->
+    {error, malformed_event }->
       mondemand_server_stats:increment (dispatcher_errors),
       error_logger:error_msg ("Bad event ~p",[Event]);
     EventName ->
-      % first we check the specific dispatch by event name, and send to all
-      % the handlers for that name
-      case dict:find (EventName, Dispatch) of
-        {ok, V} ->
-          [ M:process (Event) || M <- V ],
-          mondemand_server_stats:increment (events_dispatched);
-        error ->
-          % if we don't find the name, we send through any "*" handlers
-          case dict:find ("*", Dispatch) of
-            {ok, DV} ->
-              [ M:process (Event) || M <- DV ],
-              mondemand_server_stats:increment (events_dispatched);
-            error ->
-              mondemand_server_stats:increment (dispatcher_errors),
-              error_logger:error_msg ("No handler for event ~p in dispatch~n~p",
-                                      [EventName, Dispatch])
-          end
+      case name_to_entry (EventName, Dispatch) of
+        [] ->
+          mondemand_server_stats:increment (dispatcher_errors),
+          error_logger:error_msg ("No handler for event ~p in dispatch~n~p",
+                                  [EventName, Dispatch]);
+        V ->
+          [ Module:process (Event) || Module <- V ],
+          mondemand_server_stats:increment (events_dispatched)
       end
   end.
+
+name_to_entry (?MD_ANNOTATION_EVENT, #mds_dispatch { annotation_msg = A }) -> A;
+name_to_entry (?MD_LOG_EVENT,        #mds_dispatch { log_msg = A }) -> A;
+name_to_entry (?MD_PERF_EVENT,       #mds_dispatch { perf_msg = A }) -> A;
+name_to_entry (?MD_STATS_EVENT,      #mds_dispatch { stats_msg = A }) -> A;
+name_to_entry (?MD_TRACE_EVENT,      #mds_dispatch { trace_msg = A }) -> A;
+name_to_entry (_, _) -> [].

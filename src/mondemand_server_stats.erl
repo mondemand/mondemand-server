@@ -56,13 +56,15 @@ increment_backend (Backend, Metric, Value) ->
   mondemand:increment (prog_id(), Metric, Value, [{backend, Backend}]).
 
 flush () ->
+  All = mondemand_server_config:all(),
+  Num = mondemand_server_config:num_dispatchers(All),
   mondemand_statdb:flush (1,
     fun (StatsMsg) ->
       Event = mondemand_event:new (
                 "127.0.0.1", 0,
                 mondemand_util:millis_since_epoch(),
                 ?MD_STATS_EVENT,StatsMsg),
-      mondemand_server_dispatcher_sup:dispatch (Event)
+      mondemand_server_dispatcher_sup:dispatch (Num, Event)
     end
   ).
 

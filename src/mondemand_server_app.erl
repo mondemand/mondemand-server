@@ -12,11 +12,12 @@
 %% API functions
 %%====================================================================
 start () ->
+  All = mondemand_server_config:all(),
   Apps = lists:append ( [ [ sasl, lwes, inets, mondemand, crypto, gproc,
                             afunix, asn1, public_key,
                             ssl, xmerl, compiler, syntax_tools, mochiweb,
                             webmachine ],
-                          mondemand_server_config:applications_to_start(),
+                          mondemand_server_config:applications_to_start(All),
                           [ mondemand_server ] ] ),
   [ ensure_started (App) || App <- Apps ].
 
@@ -25,10 +26,11 @@ start () ->
 %-=====================================================================-
 
 start (_Type, _Args) ->
+  All = mondemand_server_config:all(),
   % need to make sure that all the apps called out by plugins are started
   % prior to starting our supervisor, else we get errors
   [ ensure_started (App)
-    || App <- mondemand_server_config:applications_to_start() ],
+    || App <- mondemand_server_config:applications_to_start(All) ],
 
   case mondemand_server_sup:start_link() of
     {ok, Pid} ->

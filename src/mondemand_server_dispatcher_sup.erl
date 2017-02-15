@@ -3,7 +3,10 @@
 -behaviour (supervisor).
 
 %% API
--export ([start_link/2, dispatch/1, stats/0]).
+-export ([start_link/2,
+          dispatchers/1,
+          dispatch/2
+         ]).
 
 %% supervisor callbacks
 -export ([init/1]).
@@ -11,54 +14,53 @@
 %%====================================================================
 %% API functions
 %%====================================================================
-start_link (Dispatch, NumDispatchers) ->
-  supervisor:start_link({local, ?MODULE}, ?MODULE, [Dispatch, NumDispatchers]).
+start_link (Num, Dispatch) ->
+  supervisor:start_link({local, mds_dispatcher_sup}, ?MODULE, [Num, Dispatch]).
 
-dispatch (Event) ->
-  Pid = gproc:where (gproc_pool:pick (mondemand_dispatcher)),
-  mondemand_server_dispatcher:dispatch (Pid, Event).
+dispatchers (Num) when is_integer (Num) ->
+  { 1, Num, names_tuple (Num) }.
 
-stats () ->
-  [
-    begin
-      { message_queue_len, L } = process_info (Pid, message_queue_len),
-      { worker_atom (N), gen_server:call (Pid, {stats}), L }
-    end
-    || {{_,N}, Pid}
-    <- gproc_pool:active_workers(mondemand_dispatcher) ].
+dispatch (N, Event) when is_integer (N) ->
+  R = random:uniform (N),
+  dispatch ({R, N, names_tuple(N)}, Event);
+dispatch ({C, N, Dispatchers}, Event) when C > N ->
+  dispatch ({1, N, Dispatchers}, Event);
+dispatch ({C, N, Dispatchers}, Event) ->
+  mondemand_server_dispatcher:dispatch (element (C, Dispatchers), Event),
+  {C + 1, N, Dispatchers}.
 
 %%====================================================================
 %% supervisor callbacks
 %%====================================================================
-init([Dispatch, Num]) ->
-  ok = gproc_pool:new (mondemand_dispatcher),
+init([Num, Dispatch]) ->
   mondemand_server_stats:create (events_received),
   mondemand_server_stats:create (events_dispatched),
   mondemand_server_stats:create (dispatcher_errors),
+
   { ok,
     {
       {one_for_one, 10, 10},
-      [ begin
-          WorkerName = {mondemand_dispatcher, N},
-          WorkerAtom = worker_atom (N),
-          gproc_pool:add_worker (mondemand_dispatcher, WorkerName),
-          { WorkerAtom,
-            {mondemand_server_dispatcher, start_link,
-              [Dispatch, WorkerAtom, WorkerName] },
-            transient,
-            2000,
-            worker,
-            [mondemand_server_dispatcher]
-          }
-        end
-        || N
-        <- lists:seq (1, Num)
+      [
+        { Name,
+          {mondemand_server_dispatcher, start_link, [Name, Dispatch] },
+          permanent,
+          2000,
+          worker,
+          [mondemand_server_dispatcher]
+        }
+        || Name
+        <- names_list (Num)
       ]
     }
   }.
 
-worker_atom (N) ->
-  list_to_atom (atom_to_list (mondemand_dispatcher)++"_"++integer_to_list (N)).
+names_tuple (Num) ->
+  list_to_tuple (names_list(Num)).
+names_list (Num) ->
+  [ name_atom (N) || N <- lists:seq (1,Num) ].
+
+name_atom (N) ->
+  list_to_atom (atom_to_list (mds_dispatcher)++"_"++integer_to_list (N)).
 
 %%--------------------------------------------------------------------
 %%% Test functions

@@ -49,7 +49,8 @@ init ([SupervisorName, WorkerName, WorkerModule]) ->
   mondemand_server_stats:create_backend (WorkerModule, send_errors),
 
   % config is grabbed from the server
-  Config = mondemand_server_config:backend_config (WorkerModule),
+  Config = mondemand_server_config:backend_config (WorkerModule,
+                                                   mondemand_server_config:all()),
 
   TransportMod = proplists:get_value (transport_mod, Config, undefined),
   Prefix = proplists:get_value (prefix, Config),

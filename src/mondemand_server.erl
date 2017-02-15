@@ -5,7 +5,7 @@
 -behaviour (gen_server).
 
 %% API
--export ([ start_link/0,
+-export ([ start_link/2,
            process_event/2 ]).
 
 %% gen_server callbacks
@@ -18,40 +18,41 @@
          ]).
 
 -record (state, { listeners }).
--record (listener_state, {}).
+-record (listener_state, { dispatchers }).
 
 %%====================================================================
 %% API
 %%====================================================================
-start_link () ->
-  gen_server:start_link ( { local, ?MODULE }, ?MODULE, [], []).
+start_link (ListenerConfig, DispatchConfig) ->
+  gen_server:start_link ( { local, ?MODULE }, ?MODULE,
+                          [ListenerConfig, DispatchConfig], []).
 
-process_event (Event, State) ->
+process_event (Event, State = #listener_state { dispatchers = Dispatchers }) ->
   % just ignore errors, so the whole server doesn't crash
-  try mondemand_server_dispatcher_sup:dispatch (Event) of
-    _ -> ok
+  try mondemand_server_dispatcher_sup:dispatch (Dispatchers, Event) of
+    DispatchersOut -> State#listener_state { dispatchers = DispatchersOut }
   catch
     E1:E2 ->
-      error_logger:error_msg ("Error dispatching : ~p:~p",[E1,E2])
-  end,
-  State.
+      error_logger:error_msg ("Error dispatching : ~p:~p",[E1,E2]),
+      State
+  end.
 
 %%====================================================================
 %% gen_server callbacks
 %%====================================================================
-init ([]) ->
+init ([ListenerConfig, DispatchConfig]) ->
   % I want terminate to be called
   process_flag (trap_exit, true),
 
   % lwes listener config
-  case mondemand_server_config:listener_config () of
+  case ListenerConfig of
     undefined ->
       { stop, missing_listener_config };
-    { ok, L } when is_list (L) ->
-      Channels = [ open_lwes_channel (Config) || Config <- L ],
+    L when is_list (L) ->
+      Channels = [ open_lwes_channel (Config, DispatchConfig) || Config <- L ],
       { ok, #state {listeners = Channels } };
-    { ok, Config} ->
-      Channel = open_lwes_channel (Config),
+    Config ->
+      Channel = open_lwes_channel (Config, DispatchConfig),
       { ok, #state {listeners = [Channel] } }
   end.
 
@@ -80,9 +81,14 @@ code_change (_OldVsn, State, _Extra) ->
 %%====================================================================
 %% Internal functions
 %%====================================================================
-open_lwes_channel (LwesConfig) ->
+open_lwes_channel (LwesConfig, DispatchConfig) ->
   {ok, Channel} = lwes:open (listener, LwesConfig),
-  ok = lwes:listen (Channel, fun process_event/2, raw, #listener_state{ }),
+  ok = lwes:listen (
+         Channel,
+         fun process_event/2,
+         raw,
+         #listener_state{ dispatchers = DispatchConfig }
+       ),
   Channel.
 
 %%====================================================================
