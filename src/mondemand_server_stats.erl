@@ -13,7 +13,8 @@
            create_backend/2,
            increment_backend/2,
            increment_backend/3,
-           flush/0
+           flush_init/0,
+           flush_one/2
          ]).
 
 %% gen_server callbacks
@@ -25,7 +26,7 @@
            code_change/3
          ]).
 
--record (state, { stats_flush_timer }).
+-record (state, { }).
 
 %%====================================================================
 %% API
@@ -55,18 +56,35 @@ increment_backend (Backend, Metric) ->
 increment_backend (Backend, Metric, Value) ->
   mondemand:increment (prog_id(), Metric, Value, [{backend, Backend}]).
 
-flush () ->
+flush_init () ->
   All = mondemand_server_config:all(),
   Num = mondemand_server_config:num_dispatchers(All),
-  mondemand_statdb:flush (1,
-    fun (StatsMsg) ->
+  Num.
+
+% The flush here is doing 2 things.
+%
+% 1. flushing the mondemand_statdb back through the server (except mondemand_server
+%    internal statistics) which causes aggregates to get written to rrd's as well
+%    as forwarded
+% 2. flushing the internal stats of the mondemand server to the mondemand
+%    library configured channel
+flush_one (Num, StatsMsg = #md_stats_msg { prog_id = ProgId, host = Host }) ->
+  % the server returns all "strings" as binary, so even though we use
+  % atoms above to set the values, we check against a binary here, this
+  % is grabbing all mondemand_server stats that are not aggregated (which
+  % would have a host of 'all'
+  case ProgId =:= <<"mondemand_server">> andalso Host =/= <<"all">> of
+    true ->
+      mondemand:flush_one_stat (undefined, StatsMsg);
+    false ->
+      % this will resend everything back through this server, setting the port
+      % to 0 allows the backends to determine that these are self sent
       Event = mondemand_event:new (
                 "127.0.0.1", 0,
                 mondemand_util:millis_since_epoch(),
-                ?MD_STATS_EVENT,StatsMsg),
+                ?MD_STATS_EVENT, StatsMsg),
       mondemand_server_dispatcher_sup:dispatch (Num, Event)
-    end
-  ).
+  end.
 
 %%====================================================================
 %% gen_server callbacks
@@ -75,8 +93,7 @@ init ([]) ->
   % I want terminate to be called
   process_flag (trap_exit, true),
 
-  {ok, TRef} = timer:send_interval (60000, ?MODULE, flush),
-  { ok, #state {stats_flush_timer = TRef} }.
+  { ok, #state {} }.
 
 handle_call (Request, From, State) ->
   error_logger:warning_msg ("~p : Unrecognized call ~p from ~p~n",
@@ -88,16 +105,12 @@ handle_cast (Request, State) ->
                             [?MODULE, Request]),
   { noreply, State }.
 
-handle_info (flush, State) ->
-  flush(),
-  {noreply, State};
 handle_info (Request, State) ->
   error_logger:warning_msg ("~p : Unrecognized info ~p~n",
                             [?MODULE, Request]),
   {noreply, State}.
 
-terminate (_Reason, #state { stats_flush_timer = TRef }) ->
-  timer:cancel (TRef),
+terminate (_Reason, #state { }) ->
   ok.
 
 code_change (_OldVsn, State, _Extra) ->

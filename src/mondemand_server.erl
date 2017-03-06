@@ -27,9 +27,25 @@ start_link (ListenerConfig, DispatchConfig) ->
   gen_server:start_link ( { local, ?MODULE }, ?MODULE,
                           [ListenerConfig, DispatchConfig], []).
 
-process_event (Event, State = #listener_state { dispatchers = Dispatchers }) ->
+process_event (Event = {udp, P, SenderIp, SenderPort, Data},
+               State = #listener_state { dispatchers = Dispatchers }) ->
+  % TODO: move this into lwes library?
+  %
+  % The lwes library will see if the second element of the udp packet is a
+  % port or an integer and treat integer as the ReceiptTime.  By setting the
+  % receipt time before we forward, this should ensure that backends all get
+  % the same receipt time, or don't end up with duplicate's because of delays
+  % and quick processing.  This could probably be done in the lwes library
+  % since the port is normally not useful to consumers anyway.
+  NewEvent =
+    case is_port (P) of
+      true ->
+        {udp, mondemand_util:millis_since_epoch(), SenderIp, SenderPort, Data};
+      false ->
+        Event
+    end,
   % just ignore errors, so the whole server doesn't crash
-  try mondemand_server_dispatcher_sup:dispatch (Dispatchers, Event) of
+  try mondemand_server_dispatcher_sup:dispatch (Dispatchers, NewEvent) of
     DispatchersOut -> State#listener_state { dispatchers = DispatchersOut }
   catch
     E1:E2 ->

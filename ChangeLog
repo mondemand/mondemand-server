@@ -1,3 +1,8 @@
+* Mon Mar 06 2017 Anthony Molinaro <anthonym@alumni.caltech.edu> 6.0.0
+- switch to using mondemand library pluggable flushing functionality.  This
+means that you can now control where internal metrics are sent which is
+helpful to monitor for issues with the server itself
+
 * Wed Feb 15 2017 Anthony Molinaro <anthonym@alumni.caltech.edu> 5.2.0
 - refactor how dispatching works slightly.  It should be more efficient.
 
