@@ -24,7 +24,7 @@
 %% supervisor callbacks
 -export ([ init/1 ]).
 
--define (POOL, md_be_trace_pool).
+-define (POOL, mdbet_file_pool).
 -record (state, { config,
                   root,
                   fields

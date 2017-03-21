@@ -1,3 +1,7 @@
+* Tue Mar 21 2017 Anthony Molinaro <anthonym@alumni.caltech.edu> 6.1.0
+- fixes for lwes forwarding, the two forwarders have been refactored to use
+the same backend worker.
+
 * Mon Mar 06 2017 Anthony Molinaro <anthonym@alumni.caltech.edu> 6.0.0
 - switch to using mondemand library pluggable flushing functionality.  This
 means that you can now control where internal metrics are sent which is

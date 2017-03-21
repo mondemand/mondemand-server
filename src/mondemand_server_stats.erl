@@ -68,22 +68,26 @@ flush_init () ->
 %    as forwarded
 % 2. flushing the internal stats of the mondemand server to the mondemand
 %    library configured channel
-flush_one (Num, StatsMsg = #md_stats_msg { prog_id = ProgId, host = Host }) ->
+flush_one (StatsMsg = #md_stats_msg { prog_id = ProgId, host = Host }, Num) ->
   % the server returns all "strings" as binary, so even though we use
   % atoms above to set the values, we check against a binary here, this
   % is grabbing all mondemand_server stats that are not aggregated (which
   % would have a host of 'all'
   case ProgId =:= <<"mondemand_server">> andalso Host =/= <<"all">> of
     true ->
-      mondemand:flush_one_stat (undefined, StatsMsg);
+      mondemand:flush_one_stat (StatsMsg, Num);
     false ->
       % this will resend everything back through this server, setting the port
       % to 0 allows the backends to determine that these are self sent
       Event = mondemand_event:new (
-                "127.0.0.1", 0,
+                "127.0.0.1",
+                0,  % NOTE: port of 0 is used in stats aggregation
+                    % to prevent feedback lookp
                 mondemand_util:millis_since_epoch(),
-                ?MD_STATS_EVENT, StatsMsg),
-      mondemand_server_dispatcher_sup:dispatch (Num, Event)
+                ?MD_STATS_EVENT,
+                StatsMsg),
+      mondemand_server_dispatcher_sup:dispatch (Num, Event),
+      Num
   end.
 
 %%====================================================================

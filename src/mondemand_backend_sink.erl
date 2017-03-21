@@ -26,7 +26,7 @@
 %% supervisor callbacks
 -export ([ init/1 ]).
 
--define (POOL, md_be_sink_pool).
+-define (POOL, mdbe_sink_pool).
 -record (state, { }).
 
 %%====================================================================

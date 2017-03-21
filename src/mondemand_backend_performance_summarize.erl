@@ -25,7 +25,7 @@
 %% API for fixup
 -export ([ to_stats/1 ]).
 
--define (POOL, md_perf_pool).
+-define (POOL, mdbep_summarize_pool).
 -record (state, { fixup_mod }).
 
 %%====================================================================

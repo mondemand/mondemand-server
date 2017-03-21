@@ -22,7 +22,7 @@
 %% supervisor callbacks
 -export ([ init/1 ]).
 
--define (POOL, md_perf_collate_pool).
+-define (POOL, mdbep_collate_pool).
 -record (state, { }).
 
 %%====================================================================

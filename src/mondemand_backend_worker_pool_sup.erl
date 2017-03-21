@@ -33,7 +33,7 @@ stats (SupervisorName) ->
 %%====================================================================
 %% supervisor callbacks
 %%====================================================================
-init([SupervisorName, WorkerTypeModule, NumWorkers, WorkerModule]) ->
+init([SupervisorName, WorkerTypeModule, NumWorkers, PoolModule]) ->
   ok = gproc_pool:new (SupervisorName),
   { ok,
     {
@@ -44,7 +44,7 @@ init([SupervisorName, WorkerTypeModule, NumWorkers, WorkerModule]) ->
           gproc_pool:add_worker (SupervisorName, WorkerName),
           { WorkerAtom,
             {WorkerTypeModule, start_link,
-              [SupervisorName, WorkerAtom, WorkerName, WorkerModule] },
+              [SupervisorName, WorkerAtom, WorkerName, PoolModule] },
             transient,
             2000,
             worker,

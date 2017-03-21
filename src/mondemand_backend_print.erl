@@ -26,7 +26,7 @@
 %% supervisor callbacks
 -export ([ init/1 ]).
 
--define (POOL, md_be_print_pool).
+-define (POOL, mdbe_print_pool).
 -record (state, { }).
 
 %%====================================================================
@@ -86,7 +86,7 @@ connect (State) ->
   {ok, State}.
 
 send (State, Data) ->
-  io:format ("Received ~p~n",[Data]),
+  error_logger:info_msg ("Received ~p~n",[Data]),
   { ok, State }.
 
 destroy (_) ->

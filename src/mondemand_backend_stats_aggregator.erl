@@ -22,7 +22,7 @@
 %% supervisor callbacks
 -export ([ init/1 ]).
 
--define (POOL, md_aggregator_pool).
+-define (POOL, mdbes_agg_pool).
 -record (state, {aggregation_keys}).
 
 %%====================================================================

@@ -47,25 +47,25 @@ start_link (SupervisorName, WorkerAtom, WorkerName, WorkerModule) ->
 %%====================================================================
 %% gen_server callbacks
 %%====================================================================
-init ([SupervisorName, WorkerName, WorkerModule]) ->
+init ([SupervisorName, WorkerName, PoolModule]) ->
   % ensure terminate is called
   process_flag( trap_exit, true ),
 
   % init stats
-  mondemand_server_stats:create_backend (WorkerModule, events_processed),
-  mondemand_server_stats:create_backend (WorkerModule, sent_count),
-  mondemand_server_stats:create_backend (WorkerModule, dropped_count),
-  mondemand_server_stats:create_backend (WorkerModule, process_millis),
-  mondemand_server_stats:create_backend (WorkerModule, send_millis),
-  mondemand_server_stats:create_backend (WorkerModule, connection_errors),
-  mondemand_server_stats:create_backend (WorkerModule, send_errors),
+  mondemand_server_stats:create_backend (PoolModule, events_processed),
+  mondemand_server_stats:create_backend (PoolModule, sent_count),
+  mondemand_server_stats:create_backend (PoolModule, dropped_count),
+  mondemand_server_stats:create_backend (PoolModule, process_millis),
+  mondemand_server_stats:create_backend (PoolModule, send_millis),
+  mondemand_server_stats:create_backend (PoolModule, connection_errors),
+  mondemand_server_stats:create_backend (PoolModule, send_errors),
 
   % config is grabbed from the server
-  Config = mondemand_server_config:backend_config (WorkerModule,
+  Config = mondemand_server_config:backend_config (PoolModule,
                                                    mondemand_server_config:all()
                                                   ),
 
-  WorkerMod = proplists:get_value (worker_mod, Config, undefined),
+  WorkerMod = proplists:get_value (worker_mod, Config, PoolModule),
   Prefix = proplists:get_value (prefix, Config, undefined),
   ReconnectMin = proplists:get_value (reconnect_min, Config, 10),
   ReconnectMax = proplists:get_value (reconnect_max, Config, 30000),
