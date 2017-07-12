@@ -4,3 +4,5 @@ log
 tmp
 .eunit
 .rebar
+_build
+rebar.lock
