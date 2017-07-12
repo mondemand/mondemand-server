@@ -1,3 +1,6 @@
+* Wed Jul 12 2017 Anthony Molinaro <anthonym@alumni.caltech.edu> 6.1.1
+- change afunix tag to the ref syntax so that get-deps under rebar3 works
+
 * Tue Mar 21 2017 Anthony Molinaro <anthonym@alumni.caltech.edu> 6.1.0
 - fixes for lwes forwarding, the two forwarders have been refactored to use
 the same backend worker.
