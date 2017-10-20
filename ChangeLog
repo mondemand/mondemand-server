@@ -1,3 +1,7 @@
+* Fri Oct 20 2017 Anthony Molianro <anthonym@alumni.caltech.edu> 6.2.0
+- let the root for a fs resource use the priv directory of a module
+- updated afunix reference to version without deprecation warnings
+
 * Wed Jul 12 2017 Anthony Molinaro <anthonym@alumni.caltech.edu> 6.1.1
 - change afunix tag to the ref syntax so that get-deps under rebar3 works
 

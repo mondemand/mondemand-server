@@ -28,7 +28,8 @@
           initialize_stats/1,
           increment_stat/2,
           increment_stat/3,
-          for_each_line_in_file/4
+          for_each_line_in_file/4,
+          module_priv_dir/1
         ]).
 
 seconds_since_epoch () ->
@@ -208,3 +209,14 @@ for_each_line (Device, Proc, LineNumber, Accum) ->
           for_each_line (Device, Proc, LineNumber + 1, NewAccum)
       end
   end.
+
+module_priv_dir (Module) ->
+  PrivDir = case code:priv_dir(Module) of
+    {error, _} ->
+      EbinDir = filename:dirname(code:which(Module)),
+      AppPath = filename:dirname(EbinDir),
+      filename:join(AppPath, "priv");
+    Path ->
+      Path
+  end,
+  PrivDir.

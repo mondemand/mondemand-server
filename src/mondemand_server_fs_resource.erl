@@ -13,8 +13,15 @@
 -include_lib ("webmachine/include/webmachine.hrl").
 
 init (Config) ->
-  {root, Root} = proplists:lookup (root, Config),
-  {ok, #state { root = Root } }.
+  RootDir =
+    case proplists:lookup (root, Config) of
+      {root, {privdir, Module, Path} } ->
+        filename:join(
+          mondemand_server_util:module_priv_dir (Module),
+          Path);
+      {root, Root} -> Root
+    end,
+  {ok, #state { root = RootDir } }.
 
 allowed_methods (ReqData, State) ->
   {['GET'], ReqData, State}.
@@ -88,4 +95,3 @@ dir_contents (FilePath) ->
     {ok, F} -> F;
     {error, _} -> []
   end.
-
