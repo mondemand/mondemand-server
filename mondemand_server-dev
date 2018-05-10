@@ -10,6 +10,12 @@ deps=
 for d in deps/* ; do
   deps="$deps -pa $d/ebin"
 done
+for d in _checkouts/* ; do
+  deps="$deps -pa $d/ebin"
+done
+for d in _build/default/lib/* ; do
+  deps="$deps -pa $d/ebin"
+done
 
 #cwd=`pwd`
 #pidfile="tmp/var/run/mondemand/rrdcached.pid"

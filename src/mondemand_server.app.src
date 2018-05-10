@@ -1,7 +1,7 @@
 { application, mondemand_server,
   [
     { description,"A Server for dealing with mondemand events"},
-    { vsn,"6.2.0"},
+    {vsn, {cmd, "/bin/bash -c 'awk \"match(\\$0, /[0-9]+\\.[0-9]+(\\.[0-9]+)+/){print substr(\\$0, RSTART,RLENGTH); exit}\" ChangeLog'"}},
     { modules,[]},
     { registered,[mondemand_backend_all_journaller,
                   mondemand_backend_log_file,

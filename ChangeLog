@@ -1,3 +1,6 @@
+* Fri May 11 2018 Anthony Molianro <anthonym@alumni.caltech.edu> 6.2.1
+- bump afunix to version which works under rebar3
+
 * Fri Oct 20 2017 Anthony Molianro <anthonym@alumni.caltech.edu> 6.2.0
 - let the root for a fs resource use the priv directory of a module
 - updated afunix reference to version without deprecation warnings
