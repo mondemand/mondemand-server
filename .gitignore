@@ -3,6 +3,5 @@ ebin
 log
 tmp
 .eunit
-.rebar
+.rebar*
 _*
-rebar.lock

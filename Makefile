@@ -1,21 +1,30 @@
+NAME=mondemand-server
+
+REBAR3=rebar3
 all:
-	@rebar get-deps compile
+	$(REBAR3) compile
 
-edoc:
-	@rebar skip_deps=true doc
+dialyzer:
+	$(REBAR3) dialyzer
 
-check:
-	@rm -rf .eunit
-	@mkdir -p .eunit
-	@dialyzer -pa deps/mondemand/ebin -Wno_undefined_callbacks -Wno_opaque -Wno_return --src src
-	@rebar skip_deps=true eunit
+test: dialyzer
+	  $(REBAR3) as test do eunit,cover
+
+# Compile and run unit test for individual modules: 'make test-oxgw_util'
+# or 'make test-oxgw_util test-oxgw_request'
+test-%: src/%.erl
+	$(REBAR3) as test do eunit -m $*
+
+name:
+	@echo $(NAME)
+
+version:
+	@echo $(shell awk 'match($$0, /[0-9]+\.[0-9]+(\.[0-9]+)+/){print substr($$0, RSTART,RLENGTH); exit}' ChangeLog)
 
 clean:
-	@rebar clean
+	if test -d _build; then $(REBAR3) clean; fi
 
-maintainer-clean:
-	@rebar clean
-	@rebar delete-deps
-	@rm -rf deps
-	@rm -rf tmp
-	@rm -rf log
+maintainer-clean: clean
+	rm -rf _build
+
+.PHONY:  all test name version clean maintainer-clean

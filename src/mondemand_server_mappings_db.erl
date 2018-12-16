@@ -56,10 +56,8 @@ init([Directory, ReloadSeconds]) ->
             dir = Directory,
             last_scan = []
           },
-  case load (State) of
-    { error, Reason } -> { stop, Reason };
-    InitialScan -> { ok, State#state { last_scan = InitialScan }, Delay }
-  end.
+  InitialScan = load (State),
+  { ok, State#state { last_scan = InitialScan }, Delay }.
 
 handle_call (_Request, _From, State = #state { delay = Delay }) ->
   {reply, ok, State, Delay}.

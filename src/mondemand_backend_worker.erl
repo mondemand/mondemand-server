@@ -16,17 +16,12 @@
            code_change/3
          ]).
 
--export ([behaviour_info/1]).
-
-behaviour_info(callbacks) ->
-  [ {create, 1},      % (Config) -> State
-    {connected, 1},   % (State) -> true | false
-    {connect, 1},     % (State) -> NewState
-    {send, 2},        % (State, Data) -> {ok, NewState} | {{error,_}, NewState}
-    {destroy, 1}      % (State) -> ok
-  ];
-behaviour_info(_) ->
-  undefined.
+% workers need to fill out this API
+-callback create(Config :: list()) -> State :: term().
+-callback connected(State :: term()) -> true | false.
+-callback connect(State :: term()) -> NewState :: term().
+-callback send(State :: term(), Data :: term()) -> {ok, term()} | {{error,term()}, term()}.
+-callback destroy(State:: term()) -> ok.
 
 -record (state, { prefix,
                   worker_name,
@@ -38,6 +33,7 @@ behaviour_info(_) ->
                   reconnect_time = 0,
                   pass_raw_data = false
                 }).
+
 
 start_link (SupervisorName, WorkerAtom, WorkerName, WorkerModule) ->
   gen_server:start_link ({local, WorkerAtom},?MODULE,

@@ -21,7 +21,7 @@ dispatchers (Num) when is_integer (Num) ->
   { 1, Num, names_tuple (Num) }.
 
 dispatch (N, Event) when is_integer (N) ->
-  R = random:uniform (N),
+  R = rand:uniform (N),
   dispatch ({R, N, names_tuple(N)}, Event);
 dispatch ({C, N, Dispatchers}, Event) when C > N ->
   dispatch ({1, N, Dispatchers}, Event);
