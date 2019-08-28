@@ -175,7 +175,10 @@ send (State = #state {aggregation_keys = AggKeys}, Data) ->
               true = mondemand:add_sample (ProgId, K,
                                     [{<<"host">>, <<"all">>},
                                      {<<"stat">>, gauge} | Context],
-                                    V)
+                                    V);
+            unknown ->
+              Host = mondemand_statsmsg:host (StatsMsg),
+              error_logger:error_msg ("Got 'unknown' stat ~s:~p from ~s, dropping", [K,V,Host])
           end
         end,
         Metrics
