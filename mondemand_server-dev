@@ -45,7 +45,7 @@ done
 #sleep 2
 
 erl \
-  -name md_server_$config -setcookie md_server \
+  -sname md_server_$config -setcookie md_server \
   $deps \
   -pa ebin \
   -config conf/mondemand_server_$config.config \
