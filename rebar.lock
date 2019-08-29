@@ -1,3 +1,4 @@
+{"1.1.0",
 [{<<"afunix">>,
   {git,"git://github.com/openx/afunix.git",
        {ref,"17f5f3361d7069f7c564ed34384736097a2c6039"}},
@@ -8,21 +9,22 @@
   0},
  {<<"lwes">>,
   {git,"git://github.com/lwes/lwes-erlang.git",
-       {ref,"02f3ba9125dbc9ffb839a64d73bae194792405d7"}},
+       {ref,"d6ce9ab486cfaadb8231dda771cb6bc8cc6c88df"}},
   1},
- {<<"mochiweb">>,
-  {git,"https://github.com/mochi/mochiweb",
-       {ref,"23dc11959affd9b0849c2ac0ff4200c1c82aa80c"}},
-  1},
+ {<<"mochiweb">>,{pkg,<<"mochiweb">>,<<"2.18.0">>},1},
  {<<"mondemand">>,
   {git,"git://github.com/mondemand/mondemand-erlang.git",
-       {ref,"3bd4cf51174022974181db567d558b4c9f24e251"}},
+       {ref,"117d550f9bee5f784554fdffce93474197f77268"}},
   0},
  {<<"parse_trans">>,
   {git,"git://github.com/uwiger/parse_trans.git",
-       {ref,"f22fbf4982bc541518d4a9b3ad305810460724e5"}},
+       {ref,"76abb347c3c1d00fb0ccf9e4b43e22b3d2288484"}},
   0},
  {<<"webmachine">>,
   {git,"git://github.com/webmachine/webmachine.git",
-       {ref,"c6c2f2d4e41a2761840db7f3668a4e263a93d089"}},
-  0}].
+       {ref,"92225b82fc702f78cf9d23248023ec841272df80"}},
+  0}]}.
+[
+{pkg_hash,[
+ {<<"mochiweb">>, <<"EB55F1DB3E6E960FAC4E6DB4E2DB9EC3602CC9F30B86CD1481D56545C3145D2E">>}]}
+].
